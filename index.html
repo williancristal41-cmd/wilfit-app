@@ -1522,6 +1522,8 @@ function gpsPintar(){
 }
 /* ---------- Mapa 2D próprio (tiles do OpenStreetMap/CARTO + rota desenhada em tempo real) ---------- */
 const TILE=256;
+/* Chave opcional da CARTO (os mapas funcionam sem chave; preencha se tiver uma conta CARTO) */
+const MAP_KEY="";
 function mundo(la,lg,z){const s=TILE*Math.pow(2,z),x=(lg+180)/360*s,sl=Math.sin(Math.max(-85.0511,Math.min(85.0511,la))*RAD),y=(0.5-Math.log((1+sl)/(1-sl))/(4*Math.PI))*s;return[x,y]}
 function deMundo(x,y,z){const s=TILE*Math.pow(2,z),lg=x/s*360-180,n=Math.PI-2*Math.PI*y/s;return[180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n))),lg]}
 function Mapa(el,op){
@@ -1548,7 +1550,7 @@ function Mapa(el,op){
 }
 Mapa.prototype.url=function(z,x,y){
   const n=Math.pow(2,z);x=((x%n)+n)%n;const r=(window.devicePixelRatio||1)>1.5;
-  if(this.prov===0)return`https://${"abcd"[(x+y)%4]}.basemaps.cartocdn.com/${themeNow()==="light"?"rastertiles/voyager":"dark_all"}/${z}/${x}/${y}${r?"@2x":""}.png`;
+  if(this.prov===0)return`https://${"abcd"[(x+y)%4]}.basemaps.cartocdn.com/light_all/${z}/${x}/${y}${r?"@2x":""}.png${MAP_KEY?"?key="+encodeURIComponent(MAP_KEY):""}`;
   if(this.prov===1)return`https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
   return"";
 };
