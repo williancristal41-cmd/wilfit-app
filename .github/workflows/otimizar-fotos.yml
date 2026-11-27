@@ -1,0 +1,25 @@
+name: Otimizar fotos dos exercícios
+on:
+  push:
+    paths: ["tools/otimizar_fotos.py", ".github/workflows/otimizar-fotos.yml"]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * *"   # todo dia, 06:17 em Brasília: pega fotos novas do Supabase
+permissions:
+  contents: write
+concurrency: { group: otimizar-fotos, cancel-in-progress: false }
+jobs:
+  otimizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pillow==11.0.0
+      - run: python tools/otimizar_fotos.py
+      - name: Salvar no repositório
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add img
+          if git diff --cached --quiet; then echo "Nada novo"; else git commit -m "Fotos otimizadas (automático)" && git push; fi
