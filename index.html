@@ -194,7 +194,19 @@ ol.steps{padding-left:20px;font-size:14px;line-height:1.6;color:var(--tx2)}
 .rmini span{position:absolute;right:8px;bottom:6px;font-size:12px;font-weight:700;background:var(--card);padding:3px 8px;border-radius:500px}
 .spl div{display:grid;grid-template-columns:64px 64px 1fr;align-items:center;gap:8px;padding:4px 0;font-size:13px}
 .spl i{height:8px;background:var(--g);border-radius:500px;display:block}
-.leaflet-container{font:inherit;background:var(--el)}
+.mapa{position:relative;overflow:hidden;touch-action:none;background:var(--el);user-select:none;-webkit-user-select:none}
+.mtiles{position:absolute;inset:0}
+.mt{position:absolute;left:0;top:0;width:256px;height:256px;opacity:0;transition:opacity .25s;pointer-events:none;-webkit-user-drag:none}
+.mt.ok{opacity:1}
+.mcv{position:absolute;inset:0;pointer-events:none}
+.mctl{position:absolute;right:10px;top:calc(10px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:8px;z-index:2}
+.mctl button{width:44px;height:44px;border-radius:12px;background:var(--card);color:var(--tx);font-size:22px;font-weight:700;box-shadow:0 3px 10px var(--sh)}
+.mctl .mcen{display:none;color:var(--gt)}.mctl .mcen.on{display:block}
+.mattr{position:absolute;left:6px;bottom:20px;font-size:10px;color:#333;background:rgba(255,255,255,.75);padding:1px 6px;border-radius:4px;pointer-events:none}
+.rmap .mattr{bottom:6px}
+.semtiles .mattr{display:none}
+.semtiles::after{content:"Mapa sem conexão · a rota continua sendo gravada";position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));font-size:12px;font-weight:600;background:var(--card);color:var(--mu);padding:5px 12px;border-radius:500px;white-space:nowrap;pointer-events:none}
+.rmap.semtiles::after{top:8px}.rmap .mctl{top:8px;right:8px}
 .gaut{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--mu);margin-top:2px}
 .gaut input{width:auto;min-height:auto}
 .gpsc .gsin{display:inline-block;white-space:normal}
@@ -1347,7 +1359,7 @@ Kalman.prototype.ok=function(la,lg,acc,t){acc=Math.max(1,acc);
 
 /* -- estado da sessão em andamento (salvo no aparelho a cada ponto) -- */
 let G=null;
-function gpsNovo(t){return{t,ini:0,hr:"",acum:0,seg:null,pts:[],dist:0,splits:[],prox:1000,ultSplit:0,elev:0,alt:null,accs:[],ultFix:null,watch:null,kf:null,estado:"pronto",sinal:null}}
+function gpsNovo(t){return{t,kmPts:[],rumo:null,ini:0,hr:"",acum:0,seg:null,pts:[],dist:0,splits:[],prox:1000,ultSplit:0,elev:0,alt:null,accs:[],ultFix:null,watch:null,kf:null,estado:"pronto",sinal:null}}
 function gpsCopia(){const c=Object.assign({},G);["watch","kf","ultFix","map","lyr","d","tick","contT","cont","auto","descConf","seguiu"].forEach(k=>delete c[k]);return c}
 function gpsSalvarLocal(){if(!G)return;try{store.set(GPS_KEY,JSON.stringify(gpsCopia()))}catch(e){}gpsSalvarRemoto()}
 let GPS_REM=0;
@@ -1423,7 +1435,7 @@ function gpsAbrir(t,retomar){
   G=retomar||gpsNovo(t);G.kf=new Kalman(t==="Caminhada"?2:4);G.auto=!retomar&&gpsAutoIni();
   if(GPSP.fix&&Date.now()-GPSP.em<15000){G.sinal=GPSP.acc;G.posAtual=GPSP.fix}
   const d=document.createElement("div");d.className="gps";d.setAttribute("role","dialog");d.setAttribute("aria-modal","true");d.setAttribute("aria-label","Rastreamento por GPS");
-  d.innerHTML=`<div class="gmap" id="gmap"><svg class="gsvg" aria-hidden="true"></svg></div>
+  d.innerHTML=`<div class="gmap" id="gmap"></div>
   <div class="gpan">
     <div class="row sp"><b class="gtit">${CT(G.t).i} ${esc(G.t)} com GPS</b><span class="gsin" id="gsin">Procurando sinal…</span></div>
     <div class="gbig" id="gtempo">0:00</div>
@@ -1478,6 +1490,7 @@ function gpsIniciarWatch(){
 function gpsPonto(pos){
   if(!G)return;const c=pos.coords,acc=c.accuracy||999,t=pos.timestamp||Date.now();
   G.sinal=acc;G.posAtual=[c.latitude,c.longitude];
+  if(c.heading!=null&&isFinite(c.heading)&&(c.speed||0)>0.6)G.rumo=c.heading;
   if(G.estado==="pronto"&&G.auto&&!G.cont&&acc<=GPS_ACC_MAX)gpsContagem();
   if(G.estado!=="rodando")return gpsPintar();
   if(acc>GPS_ACC_MAX)return gpsPintar();
@@ -1487,8 +1500,9 @@ function gpsPonto(pos){
   const d=hav(u,p),dt=(t-u[2])/1000;
   if(d<Math.max(3,acc*0.4))return gpsPintar();                     /* tremida parada no lugar */
   if(dt>0&&d/dt*3.6>(GPS_VEL_MAX[G.t]||32))return gpsPintar();       /* salto impossível */
+  if(!(c.heading!=null&&isFinite(c.heading)&&(c.speed||0)>0.6))G.rumo=rumoEntre(u,p);
   G.pts.push(p);G.ultFix=p;G.dist+=d;G.accs.push(acc);gpsAlt(c);
-  while(G.dist>=G.prox){const tm=gpsTempo();G.splits.push(Math.round((tm-G.ultSplit)/1000));G.ultSplit=tm;G.prox+=1000;if(navigator.vibrate)try{navigator.vibrate([120,80,120])}catch(e){}}
+  while(G.dist>=G.prox){const tm=gpsTempo();G.splits.push(Math.round((tm-G.ultSplit)/1000));(G.kmPts=G.kmPts||[]).push([p[0],p[1]]);G.ultSplit=tm;G.prox+=1000;if(navigator.vibrate)try{navigator.vibrate([120,80,120])}catch(e){}}
   if(G.pts.length%5===0)gpsSalvarLocal();
   gpsPintar();
 }
@@ -1506,35 +1520,88 @@ function gpsPintar(){
   else if(G.estado==="pronto")$g("#gdica").textContent=G.auto?"Aguardando o sinal ficar bom para começar sozinho. Mantenha a tela ligada.":"Mantenha a tela ligada e o app aberto durante a atividade.";
   gpsDesenhar();
 }
-/* mapa: Leaflet (OpenStreetMap) se disponível; senão, desenho simples da rota */
-let LF=null;
-function carregarLeaflet(){
-  if(window.L)return Promise.resolve(window.L);if(LF)return LF;
-  LF=new Promise((ok,er)=>{
-    const css=document.createElement("link");css.rel="stylesheet";css.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";document.head.appendChild(css);
-    const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";sc.onload=()=>window.L?ok(window.L):er();sc.onerror=()=>{LF=null;er()};document.head.appendChild(sc);
-    setTimeout(()=>{if(!window.L){LF=null;er()}},12000);
-  });return LF;
+/* ---------- Mapa 2D próprio (tiles do OpenStreetMap/CARTO + rota desenhada em tempo real) ---------- */
+const TILE=256;
+function mundo(la,lg,z){const s=TILE*Math.pow(2,z),x=(lg+180)/360*s,sl=Math.sin(Math.max(-85.0511,Math.min(85.0511,la))*RAD),y=(0.5-Math.log((1+sl)/(1-sl))/(4*Math.PI))*s;return[x,y]}
+function deMundo(x,y,z){const s=TILE*Math.pow(2,z),lg=x/s*360-180,n=Math.PI-2*Math.PI*y/s;return[180/Math.PI*Math.atan(0.5*(Math.exp(n)-Math.exp(-n))),lg]}
+function Mapa(el,op){
+  op=op||{};this.el=el;this.z=op.z||17;this.c=op.c||[-23.55,-46.63];this.seguir=op.seguir!==false;this.rota=[];this.km=[];this.pos=null;this.acc=0;this.rumo=null;
+  this.prov=0;this.erros=0;this.cache=new Map();this.zMin=3;this.zMax=19;
+  el.classList.add("mapa");el.innerHTML=`<div class="mtiles"></div><canvas class="mcv"></canvas><div class="mctl"><button data-m="+" aria-label="Aproximar">+</button><button data-m="-" aria-label="Afastar">−</button><button data-m="c" class="mcen" aria-label="Centralizar em mim" title="Centralizar">⌖</button></div><div class="mattr">© OpenStreetMap · CARTO</div>`;
+  this.tl=el.querySelector(".mtiles");this.cv=el.querySelector(".mcv");this.btC=el.querySelector(".mcen");
+  el.querySelector(".mctl").addEventListener("click",e=>{const b=e.target.closest("[data-m]");if(!b)return;e.stopPropagation();
+    if(b.dataset.m==="+")this.zoom(1);else if(b.dataset.m==="-")this.zoom(-1);else{this.seguir=true;if(this.pos)this.c=this.pos.slice();this.desenhar()}});
+  /* arrastar e pinça */
+  const pts=new Map();let ini=null,pin=null;
+  el.addEventListener("pointerdown",e=>{if(e.target.closest(".mctl"))return;el.setPointerCapture&&el.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);
+    if(pts.size===1)ini={x:e.clientX,y:e.clientY,c:mundo(this.c[0],this.c[1],this.z)};
+    if(pts.size===2){const[a,b]=[...pts.values()];pin=Math.hypot(a[0]-b[0],a[1]-b[1])}});
+  el.addEventListener("pointermove",e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,[e.clientX,e.clientY]);
+    if(pts.size===2&&pin){const[a,b]=[...pts.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(d/pin>1.45){this.zoom(1);pin=d}else if(d/pin<0.69){this.zoom(-1);pin=d}return}
+    if(ini&&pts.size===1){const dx=e.clientX-ini.x,dy=e.clientY-ini.y;if(Math.abs(dx)+Math.abs(dy)>4){this.seguir=false;this.c=deMundo(ini.c[0]-dx,ini.c[1]-dy,this.z);this.desenhar()}}});
+  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)pin=null;if(!pts.size)ini=null;else{const p=[...pts.values()][0];ini={x:p[0],y:p[1],c:mundo(this.c[0],this.c[1],this.z)}}};
+  el.addEventListener("pointerup",up);el.addEventListener("pointercancel",up);
+  el.addEventListener("wheel",e=>{e.preventDefault();this.zoom(e.deltaY<0?1:-1)},{passive:false});
+  el.addEventListener("dblclick",e=>{e.preventDefault();this.zoom(1)});
+  this.ro=window.ResizeObserver?new ResizeObserver(()=>this.desenhar()):null;if(this.ro)this.ro.observe(el);
+  this.desenhar();
 }
-function novoMapa(el,L){
-  const m=L.map(el,{zoomControl:false,attributionControl:true});
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/"+(themeNow()==="light"?"rastertiles/voyager":"dark_all")+"/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"© OpenStreetMap © CARTO"}).addTo(m);
-  return m;
-}
-async function gpsMapa(){
-  try{const L=await carregarLeaflet();if(!G||!G.d)return;const el=G.d.querySelector("#gmap");G.d.querySelector(".gsvg").style.display="none";
-    G.map=novoMapa(el,L);G.map.setView(G.posAtual||[-23.55,-46.63],G.posAtual?17:4);
-    G.lyr={rota:L.polyline([],{color:"#1DB954",weight:6,opacity:.95}).addTo(G.map),eu:L.circleMarker([0,0],{radius:8,color:"#fff",weight:3,fillColor:"#1DB954",fillOpacity:1}),prec:L.circle([0,0],{radius:1,color:"#1DB954",weight:1,fillOpacity:.12})};
-    gpsDesenhar();
-  }catch(e){/* sem internet para o mapa: fica o desenho da rota */}
+Mapa.prototype.url=function(z,x,y){
+  const n=Math.pow(2,z);x=((x%n)+n)%n;const r=(window.devicePixelRatio||1)>1.5;
+  if(this.prov===0)return`https://${"abcd"[(x+y)%4]}.basemaps.cartocdn.com/${themeNow()==="light"?"rastertiles/voyager":"dark_all"}/${z}/${x}/${y}${r?"@2x":""}.png`;
+  if(this.prov===1)return`https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+  return"";
+};
+Mapa.prototype.zoom=function(d){const z=Math.max(this.zMin,Math.min(this.zMax,this.z+d));if(z===this.z)return;this.z=z;this.desenhar()};
+Mapa.prototype.desenhar=function(){
+  const el=this.el,W=el.clientWidth,H=el.clientHeight;if(!W||!H)return;
+  if(this.seguir&&this.pos)this.c=this.pos.slice();
+  const z=this.z,cw=mundo(this.c[0],this.c[1],z),ox=cw[0]-W/2,oy=cw[1]-H/2;this.o=[ox,oy];
+  /* tiles */
+  const usados=new Set();
+  if(this.prov<2){const x0=Math.floor(ox/TILE),x1=Math.floor((ox+W)/TILE),y0=Math.max(0,Math.floor(oy/TILE)),y1=Math.min(Math.pow(2,z)-1,Math.floor((oy+H)/TILE));
+    for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){const k=this.prov+"/"+z+"/"+x+"/"+y;usados.add(k);let im=this.cache.get(k);
+      if(!im){im=document.createElement("img");im.alt="";im.draggable=false;im.decoding="async";im.className="mt";
+        im.onload=()=>{this.erros=0;im.classList.add("ok")};
+        im.onerror=()=>{im.remove();this.cache.delete(k);if(++this.erros>=4&&this.prov<2){this.prov++;this.erros=0;this.cache.forEach(i=>i.remove());this.cache.clear();this.desenhar()}};
+        im.src=this.url(z,x,y);this.cache.set(k,im);this.tl.appendChild(im)}
+      im.style.transform=`translate(${Math.round(x*TILE-ox)}px,${Math.round(y*TILE-oy)}px)`}}
+  this.cache.forEach((im,k)=>{if(!usados.has(k)){im.remove();this.cache.delete(k)}});
+  this.el.classList.toggle("semtiles",this.prov>=2);
+  /* camada da rota */
+  const dpr=Math.min(2,window.devicePixelRatio||1),cv=this.cv;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+"px";cv.style.height=H+"px";
+  const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+  if(this.prov>=2){g.strokeStyle="rgba(127,127,127,.18)";g.lineWidth=1;const pas=64;for(let x=-((ox%pas)+pas)%pas;x<W;x+=pas){g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.stroke()}for(let y=-((oy%pas)+pas)%pas;y<H;y+=pas){g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}}
+  const P=p=>{const w=mundo(p[0],p[1],z);return[w[0]-ox,w[1]-oy]};
+  if(this.rota.length>1){g.lineCap="round";g.lineJoin="round";
+    g.strokeStyle="rgba(0,0,0,.35)";g.lineWidth=9;g.beginPath();this.rota.forEach((p,i)=>{const q=P(p);i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});g.stroke();
+    g.strokeStyle="#1DB954";g.lineWidth=6;g.stroke()}
+  if(this.rota.length){const q=P(this.rota[0]);g.beginPath();g.arc(q[0],q[1],7,0,Math.PI*2);g.fillStyle="#fff";g.fill();g.lineWidth=3;g.strokeStyle="#1DB954";g.stroke()}
+  this.km.forEach((p,i)=>{const q=P(p);g.beginPath();g.arc(q[0],q[1],11,0,Math.PI*2);g.fillStyle="#121212";g.fill();g.lineWidth=2;g.strokeStyle="#1DB954";g.stroke();g.fillStyle="#fff";g.font="700 11px "+FONT;g.textAlign="center";g.textBaseline="middle";g.fillText(String(i+1),q[0],q[1]+.5)});
+  if(this.pos){const q=P(this.pos),mpp=156543.03392*Math.cos(this.pos[0]*RAD)/Math.pow(2,z),r=Math.max(10,this.acc/mpp);
+    g.beginPath();g.arc(q[0],q[1],r,0,Math.PI*2);g.fillStyle="rgba(29,185,84,.15)";g.fill();g.strokeStyle="rgba(29,185,84,.5)";g.lineWidth=1;g.stroke();
+    if(this.rumo!=null){g.save();g.translate(q[0],q[1]);g.rotate(this.rumo*RAD);g.beginPath();g.moveTo(0,-22);g.lineTo(9,-6);g.lineTo(-9,-6);g.closePath();g.fillStyle="#1DB954";g.fill();g.restore()}
+    g.beginPath();g.arc(q[0],q[1],9,0,Math.PI*2);g.fillStyle="#1DB954";g.fill();g.lineWidth=3;g.strokeStyle="#fff";g.stroke()}
+  this.btC.classList.toggle("on",!this.seguir&&!!this.pos);
+};
+Mapa.prototype.atualizar=function(rota,pos,acc,rumo,km){this.rota=rota||[];this.pos=pos||null;this.acc=acc||0;if(rumo!=null&&isFinite(rumo))this.rumo=rumo;this.km=km||[];this.desenhar()};
+Mapa.prototype.enquadrar=function(pts,pad){ /* zoom e centro para caber a rota inteira */
+  if(!pts.length)return;const W=this.el.clientWidth||360,H=this.el.clientHeight||300;pad=pad||30;let z=18;
+  for(;z>3;z--){let a=1e12,b=-1e12,c=1e12,d=-1e12;pts.forEach(p=>{const w=mundo(p[0],p[1],z);a=Math.min(a,w[0]);b=Math.max(b,w[0]);c=Math.min(c,w[1]);d=Math.max(d,w[1])});if(b-a<=W-2*pad&&d-c<=H-2*pad)break}
+  let la=0,lg=0;pts.forEach(p=>{la+=p[0];lg+=p[1]});const w0=pts.map(p=>mundo(p[0],p[1],z)),cx=(Math.min(...w0.map(w=>w[0]))+Math.max(...w0.map(w=>w[0])))/2,cy=(Math.min(...w0.map(w=>w[1]))+Math.max(...w0.map(w=>w[1])))/2;
+  this.z=z;this.c=deMundo(cx,cy,z);this.seguir=false;this.desenhar();
+};
+Mapa.prototype.fim=function(){if(this.ro)this.ro.disconnect();this.cache.clear();this.el.innerHTML=""};
+function rumoEntre(a,b){const f1=a[0]*RAD,f2=b[0]*RAD,dl=(b[1]-a[1])*RAD,y=Math.sin(dl)*Math.cos(f2),x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);return(Math.atan2(y,x)/RAD+360)%360}
+
+function gpsMapa(){
+  if(!G||!G.d)return;const el=G.d.querySelector("#gmap");
+  G.map=new Mapa(el,{z:G.posAtual?17:4,c:G.posAtual||[-15.8,-47.9]});G.mapaOk=!!G.posAtual;gpsDesenhar();
 }
 function gpsDesenhar(){
-  if(!G||!G.d)return;
-  if(G.map&&G.lyr){const L=window.L,ll=G.pts.map(p=>[p[0],p[1]]);G.lyr.rota.setLatLngs(ll);
-    if(G.posAtual){G.lyr.eu.setLatLng(G.posAtual).addTo(G.map);G.lyr.prec.setLatLng(G.posAtual).setRadius(G.sinal||1).addTo(G.map);
-      if(!G.seguiu||G.estado==="rodando"){G.map.setView(G.posAtual,Math.max(G.map.getZoom(),16),{animate:false});G.seguiu=1}}
-    return}
-  const svg=G.d.querySelector(".gsvg");svg.innerHTML=rotaSVG(G.pts,svg.clientWidth||360,svg.clientHeight||300,G.posAtual);
+  if(!G||!G.map)return;
+  if(G.posAtual&&!G.mapaOk){G.map.z=17;G.map.seguir=true;G.mapaOk=1}
+  G.map.atualizar(G.pts,G.posAtual,G.sinal,G.rumo,G.kmPts||[]);
 }
 function rotaSVG(pts,W,H,atual){
   const all=pts.slice();if(atual)all.push(atual);if(!all.length)return`<text x="50%" y="50%" text-anchor="middle" fill="currentColor" opacity=".6" font-size="14">Aguardando o GPS…</text>`;
@@ -1560,7 +1627,7 @@ function gpsSalvar(){
 }
 function gpsFechar(limpar){
   if(!G)return;if(G.watch!=null)try{navigator.geolocation.clearWatch(G.watch)}catch(e){}
-  clearInterval(G.tick);clearTimeout(G.contT);if(G.map)try{G.map.remove()}catch(e){}
+  clearInterval(G.tick);clearTimeout(G.contT);if(G.map)try{G.map.fim()}catch(e){}
   setTimeout(gpsAuto,400);
   G.d&&G.d.remove();if(limpar){gpsLimparLocal();gpsApagarRemoto()}G=null;acordar(false);
   document.body.classList.toggle("lock",!!((S.me&&S.det)||S.adm||(typeof G!=="undefined"&&G)||(typeof SH!=="undefined"&&SH)||(typeof CR!=="undefined"&&CR)));
@@ -1584,11 +1651,11 @@ async function verRota(i){
   ${x.splits&&x.splits.length?`<h3>Parciais por km</h3><div class="spl">${x.splits.map((s,j)=>`<div><span>${j+1}º km</span><b>${paceSeg(s)}</b><i style="width:${Math.round(100*Math.min(...x.splits)/s)}%"></i></div>`).join("")}</div>`:""}
   <button class="btn pri w" style="margin-top:12px" data-r="sh">📤 Compartilhar</button></div>`;
   document.body.appendChild(d);document.body.classList.add("lock");
-  let mp=null;const fechar=()=>{if(mp)try{mp.remove()}catch(e){}d.remove();document.body.classList.toggle("lock",!!((S.me&&S.det)||S.adm))};
+  let mp=null;const fechar=()=>{if(mp)try{mp.fim()}catch(e){}d.remove();document.body.classList.toggle("lock",!!((S.me&&S.det)||S.adm))};
   d.addEventListener("click",e=>{if(e.target===d){fechar();return}const b=e.target.closest("[data-r]");if(!b)return;if(b.dataset.r==="x")fechar();if(b.dataset.r==="sh"){fechar();abrirShare("cardio",x)}});
-  try{const L=await carregarLeaflet();if(!d.isConnected)return;const el=d.querySelector("#rmap");el.innerHTML="";mp=novoMapa(el,L);const ln=L.polyline(pts,{color:"#1DB954",weight:6}).addTo(mp);
-    L.circleMarker(pts[0],{radius:7,color:"#fff",weight:3,fillColor:"#1DB954",fillOpacity:1}).addTo(mp);L.circleMarker(pts[pts.length-1],{radius:7,color:"#fff",weight:3,fillColor:"#F3727F",fillOpacity:1}).addTo(mp);
-    mp.fitBounds(ln.getBounds(),{padding:[24,24]})}catch(e){}
+  const el=d.querySelector("#rmap");el.innerHTML="";mp=new Mapa(el,{seguir:false});
+  const km=[];if(x.splits&&x.splits.length){let ac=0,prox=1000;for(let k=1;k<pts.length&&km.length<x.splits.length;k++){ac+=hav(pts[k-1],pts[k]);if(ac>=prox){km.push(pts[k]);prox+=1000}}}
+  mp.atualizar(pts,null,0,null,km);mp.enquadrar(pts,28);
 }
 
 /* ---------- Compartilhar nas redes (imagem com o logo do WilFit) ---------- */
