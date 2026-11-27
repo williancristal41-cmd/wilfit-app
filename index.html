@@ -82,7 +82,7 @@ h1{font-size:26px;font-weight:700}h2{font-size:20px;font-weight:700}h3{font-size
 .arm{transform-origin:100px 58px;animation:mv 2s ease-in-out infinite}
 @keyframes mv{0%,100%{transform:rotate(-45deg)}50%{transform:rotate(45deg)}}
 @media (prefers-reduced-motion:reduce){.arm{animation:none}}
-.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--el);color:var(--tx);box-shadow:0 6px 20px var(--sh);text-align:center;padding:12px 18px;border-radius:500px;font-size:14px;z-index:200;max-width:90vw}
+.toast{pointer-events:none;position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--el);color:var(--tx);box-shadow:0 6px 20px var(--sh);text-align:center;padding:12px 18px;border-radius:500px;font-size:14px;z-index:200;max-width:90vw}
 ol.steps{padding-left:20px;font-size:14px;line-height:1.6;color:var(--tx2)}
 #rest{position:sticky;top:calc(8px + env(safe-area-inset-top));z-index:25}
 .rest{background:var(--g);color:var(--on);padding:8px 8px 8px 18px;border-radius:500px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px;font-weight:700;box-shadow:0 6px 20px var(--sh);margin:8px 0}
@@ -195,6 +195,9 @@ ol.steps{padding-left:20px;font-size:14px;line-height:1.6;color:var(--tx2)}
 .spl div{display:grid;grid-template-columns:64px 64px 1fr;align-items:center;gap:8px;padding:4px 0;font-size:13px}
 .spl i{height:8px;background:var(--g);border-radius:500px;display:block}
 .leaflet-container{font:inherit;background:var(--el)}
+.gaut{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--mu);margin-top:2px}
+.gaut input{width:auto;min-height:auto}
+.gpsc .gsin{display:inline-block;white-space:normal}
 .fatal{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top));z-index:300;background:var(--red);color:#fff;padding:12px 16px;border-radius:12px;font-size:14px;font-weight:600}
 </style>
 </head>
@@ -435,6 +438,7 @@ function fixUser(o){
   if(!o.hist||typeof o.hist!=="object")o.hist={};
   if(!o.ach||typeof o.ach!=="object")o.ach={};
   if(!Array.isArray(o.exu))o.exu=[];
+  o.cardio.forEach((c,i)=>{if(c&&!c.id)c.id="c"+String(c.date||"").replace(/-/g,"")+"_"+i+"_"+Math.round((+c.min||0)*10)});
   return o;
 }
 const mkUser=()=>fixUser({});
@@ -748,6 +752,50 @@ async function checkNet(){
   }finally{checking=false}
 }
 
+/* ---------- Espelho em tabelas do Supabase (cardio, conquistas, histórico) ---------- */
+const MIR_KEY="wilfit_mirror_v1";
+let MIR={};try{MIR=JSON.parse(store.get(MIR_KEY)||"{}")||{}}catch(e){MIR={}}
+let mirBusy=false,mirDeNovo=false;
+const mirSave=()=>store.set(MIR_KEY,JSON.stringify(MIR));
+async function mirTabela(em,uid,nome,conf,chave,linhas){
+  const hash=JSON.stringify(linhas),k=em+":"+nome;
+  if(MIR[k]===hash)return true;
+  if(linhas.length){
+    const r=await rest(nome+"?on_conflict="+conf,{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:hash});
+    if(!r.ok){const j=await r.json().catch(()=>null);if(isTableErr(r,j))return false;throw new Error((j&&j.message)||("Erro "+r.status))}
+  }
+  const ids=linhas.map(l=>String(l[chave]).replace(/[^\w\-:]/g,""));
+  const filtro=ids.length?"&"+chave+"=not.in.("+ids.map(encodeURIComponent).join(",")+")":"";
+  const d=await rest(nome+"?user_id=eq."+encodeURIComponent(uid)+filtro,{method:"DELETE",headers:{Prefer:"return=minimal"}});
+  if(!d.ok&&d.status!==404)throw new Error("Erro "+d.status);
+  MIR[k]=hash;MIR[em+":em"]=Date.now();mirSave();return true;
+}
+async function espelhar(){
+  if(!S.me||!SES||S.pend||!DB[S.me])return;
+  if(mirBusy){mirDeNovo=true;return}
+  mirBusy=true;const em=S.me,uid=SES.user.id,u=DB[em];
+  try{
+    const n=v=>{v=+v;return v>0?v:null};
+    const cardio=u.cardio.filter(x=>x&&x.id&&+x.min>0&&/^\d{4}-\d{2}-\d{2}$/.test(x.date||"")).map(x=>({
+      user_id:uid,local_id:x.id,tipo:String(x.t||"Outro"),data:x.date,hora:/^\d{2}:\d{2}$/.test(x.hr||"")?x.hr:null,
+      minutos:Math.round(+x.min*10)/10,km:Math.round((+x.km||0)*100)/100,kcal:Math.round(kcalDe(x))||0,
+      fc_media:n(x.fc),fc_max:n(x.fcmax),intensidade:["leve","moderada","intensa"].includes(x.int)?x.int:null,inclinacao:n(x.incl),
+      sensacao:n(x.rpe),observacoes:x.obs||null,gps:!!x.gps,rota:x.rota||null,parciais_seg:Array.isArray(x.splits)&&x.splits.length?x.splits:null,
+      elevacao_m:n(x.elev),precisao_m:n(x.acc)}));
+    const conq=Object.keys(u.ach).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(u.ach[k])).map(k=>({user_id:uid,conquista:k,desbloqueada_em:u.ach[k]}));
+    const hist=Object.keys(u.hist).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).map(d=>({user_id:uid,data:d,series:+u.hist[d].s||0,completo:!!u.hist[d].c,hora_inicio:u.hist[d].h!=null?+u.hist[d].h:null}));
+    await mirTabela(em,uid,"wilfit_cardio","user_id,local_id","local_id",cardio);
+    await mirTabela(em,uid,"wilfit_conquistas","user_id,conquista","conquista",conq);
+    await mirTabela(em,uid,"wilfit_historico","user_id,data","data",hist);
+    const e=document.getElementById("nuvem");if(e)e.innerHTML=nuvemHtml();
+  }catch(e){/* tenta de novo na próxima sincronização */}
+  finally{mirBusy=false;if(mirDeNovo){mirDeNovo=false;setTimeout(espelhar,1500)}}
+}
+function nuvemHtml(){
+  const u=U(),t=MIR[S.me+":em"];
+  return `☁ No Supabase: <b>${u.cardio.length}</b> sessões de cardio, <b>${Object.keys(u.ach).length}</b> conquistas e <b>${Object.keys(u.hist).length}</b> dias de treino${t?" · atualizado às "+hm(t).slice(0,5):" · aguardando primeira sincronização"}.`;
+}
+
 /* ---------- Sincronização ---------- */
 const SYNC_TXT={ok:"☁ Sincronizado",pend:"☁ Salvando…",err:"⚠ Falha ao sincronizar",off:"☁ Offline"};
 let LASTSYNC=0;
@@ -771,7 +819,7 @@ async function push(ka){
   try{
     const r=await rest("wilfit_data?on_conflict=user_id",{method:"POST",keepalive:!!ka&&snap.length<60000,headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:uid,email:em,data:JSON.parse(snap),updated_at:new Date().toISOString()})});
     if(!r.ok){const j=await r.json().catch(()=>null);throw{msg:(j&&j.message)||"Erro "+r.status,table:isTableErr(r,j),perm:!!(j&&j.code==="42501")}}
-    LAST=snap;
+    LAST=snap;setTimeout(espelhar,300);
     if(NET.st!=="ok")setNet("ok","Internet e Supabase funcionando. Dados na nuvem.");
     if(S.me===em){
       if(JSON.stringify(DB[em])===snap){delete DIRTY[em];saveDirty();setSync("ok")}
@@ -815,6 +863,7 @@ async function boot(){
       const nd=fixUser(row.data),a=JSON.stringify(nd);
       LAST=a;
       if(DIRTY[em])return;
+      setTimeout(espelhar,600);
       if(a!==JSON.stringify(DB[em])){
         DB[em]=nd;saveLocal();
         const ae=document.activeElement;
@@ -1217,6 +1266,7 @@ function vCardio(){
   ${rec.km||rec.min||rec.pc?`<div class="card"><span class="lab">Seus recordes</span><div class="chips" style="margin-top:8px">${rec.km?`<span class="chipx">📏 Maior distância: <b>${nf(rec.km.km,2)} km</b></span>`:""}${rec.min?`<span class="chipx">⏱️ Mais tempo: <b>${durFmt(rec.min.min)}</b></span>`:""}${rec.pc?`<span class="chipx">⚡ Melhor pace: <b>${pace(rec.pc.min,rec.pc.km)}</b></span>`:""}</div></div>`:""}
   ${gpsPendente()?`<div class="card shok"><span>🛰️ Há uma atividade com GPS interrompida.</span><div class="row" style="gap:6px"><button class="btn pri" style="height:36px" data-a="gpsret">Retomar</button><button class="btn dng" style="height:36px" data-a="gpsdesc">Descartar</button></div></div>`:""}
   ${S.cfEdit==null?`<div class="card gpsc"><div class="row" style="gap:10px"><div class="cico">🛰️</div><div style="flex:1;min-width:0"><b>Gravar rota com GPS</b><div class="mu">Alta precisão, mapa ao vivo, pace e parciais por km. Para atividades ao ar livre.</div></div></div>
+  <div style="margin:10px 0 2px"><span id="gpspronto" class="gsin ${gpsProntoTxt()[0]}">📍 ${esc(gpsProntoTxt()[1])}</span></div>${gpsAjudaHtml()}
   <div class="g2"><button class="btn pri" data-a="gpsini" data-v="Corrida">🏃 Corrida</button><button class="btn pri" data-a="gpsini" data-v="Caminhada">🚶 Caminhada</button></div></div>`:""}
   <div class="card"><h3 style="margin-top:0">${S.cfEdit!=null?"Editar sessão":"Registro manual"}</h3>
   <label class="lbl">Atividade</label><div class="tipos">${CTIPOS.filter(x=>CVIS.includes(x.n)||x.n===f.t).map(x=>`<button class="tipo ${f.t===x.n?"on":""}" data-a="cft" data-v="${esc(x.n)}"><span>${x.i}</span>${esc(x.n)}</button>`).join("")}</div>
@@ -1298,7 +1348,24 @@ Kalman.prototype.ok=function(la,lg,acc,t){acc=Math.max(1,acc);
 /* -- estado da sessão em andamento (salvo no aparelho a cada ponto) -- */
 let G=null;
 function gpsNovo(t){return{t,ini:0,hr:"",acum:0,seg:null,pts:[],dist:0,splits:[],prox:1000,ultSplit:0,elev:0,alt:null,accs:[],ultFix:null,watch:null,kf:null,estado:"pronto",sinal:null}}
-function gpsSalvarLocal(){if(!G)return;try{const c=Object.assign({},G);delete c.watch;delete c.kf;delete c.ultFix;delete c.map;delete c.lyr;store.set(GPS_KEY,JSON.stringify(c))}catch(e){}}
+function gpsCopia(){const c=Object.assign({},G);["watch","kf","ultFix","map","lyr","d","tick","contT","cont","auto","descConf","seguiu"].forEach(k=>delete c[k]);return c}
+function gpsSalvarLocal(){if(!G)return;try{store.set(GPS_KEY,JSON.stringify(gpsCopia()))}catch(e){}gpsSalvarRemoto()}
+let GPS_REM=0;
+async function gpsSalvarRemoto(forcar){
+  if(!G||!SES||S.pend||G.estado==="pronto")return;
+  if(!forcar&&Date.now()-GPS_REM<25000)return;GPS_REM=Date.now();
+  try{await rest("wilfit_gps_sessao?on_conflict=user_id",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:SES.user.id,dados:gpsCopia(),updated_at:new Date().toISOString()})})}catch(e){}
+}
+async function gpsApagarRemoto(){if(!SES)return;try{await rest("wilfit_gps_sessao?user_id=eq."+encodeURIComponent(SES.user.id),{method:"DELETE",headers:{Prefer:"return=minimal"}})}catch(e){}}
+let GPS_REM_OLHOU=false;
+async function gpsBuscarRemoto(){ /* sessão interrompida em outro aparelho ou com dados locais apagados */
+  if(GPS_REM_OLHOU||!SES||S.pend||gpsPendente()||G)return;GPS_REM_OLHOU=true;
+  try{const r=await rest("wilfit_gps_sessao?select=dados,updated_at&user_id=eq."+encodeURIComponent(SES.user.id));if(!r.ok)return;
+    const j=await r.json(),row=Array.isArray(j)&&j[0];if(!row||!row.dados||!row.dados.ini)return;
+    if(Date.now()-Date.parse(row.updated_at)>12*3600e3){gpsApagarRemoto();return}
+    store.set(GPS_KEY,JSON.stringify(row.dados));if(S.tab==="crd")R();
+  }catch(e){}
+}
 function gpsLimparLocal(){try{localStorage.removeItem(GPS_KEY)}catch(e){}}
 const gpsTempo=()=>G?G.acum+(G.seg?Date.now()-G.seg:0):0;
 const segFmt=ms=>{const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60);return(h?h+":"+pad(m):m)+":"+pad(s%60)};
@@ -1310,10 +1377,51 @@ function gpsPaceAtual(){ /* ritmo dos últimos ~30 s */
   const dt=(fim[2]-p[i][2])/1000;return d>15?dt/(d/1000):NaN;
 }
 /* -- tela -- */
+/* ---------- Acesso automático ao GPS ----------
+   O navegador sempre pede a permissão na primeira vez; depois disso o app liga o GPS sozinho
+   ao abrir o Cardio, já "aquece" o sinal e inicia a gravação quando a precisão fica boa. */
+const GPSP={st:"?",fix:null,acc:null,em:0,watch:null,err:0};
+const GPS_AUTO_KEY="wilfit_gps_auto";
+const gpsAutoIni=()=>store.get(GPS_AUTO_KEY)!=="0";
+async function gpsPermEstado(){
+  try{if(navigator.permissions&&navigator.permissions.query){const p=await navigator.permissions.query({name:"geolocation"});GPSP.st=p.state;
+    p.onchange=()=>{GPSP.st=p.state;gpsAuto();pintarGpsPronto()}}}catch(e){}
+  return GPSP.st;
+}
+function gpsAuto(){
+  if(S.me&&!S.pend&&S.tab==="crd")gpsBuscarRemoto();
+  const quer=S.me&&!S.pend&&S.tab==="crd"&&!document.hidden&&!G&&("geolocation" in navigator)&&location.protocol!=="file:";
+  if(!quer){gpsEsfriar();return}
+  if(GPSP.watch!=null||GPSP.st==="denied")return;
+  GPSP.watch=navigator.geolocation.watchPosition(p=>{GPSP.fix=[p.coords.latitude,p.coords.longitude];GPSP.acc=p.coords.accuracy;GPSP.em=Date.now();GPSP.err=0;if(GPSP.st!=="granted")GPSP.st="granted";pintarGpsPronto()},
+    e=>{GPSP.err=e.code;if(e.code===1){GPSP.st="denied";gpsEsfriar()}pintarGpsPronto()},
+    {enableHighAccuracy:true,maximumAge:0,timeout:20000});
+  pintarGpsPronto();
+}
+function gpsEsfriar(){if(GPSP.watch!=null){try{navigator.geolocation.clearWatch(GPSP.watch)}catch(e){}GPSP.watch=null}}
+function gpsProntoTxt(){
+  if(!("geolocation" in navigator))return["ruim","Este navegador não oferece GPS."];
+  if(GPSP.st==="denied"||GPSP.err===1)return["ruim","Localização bloqueada. Toque em “Como liberar” abaixo."];
+  if(GPSP.fix&&Date.now()-GPSP.em<20000){const a=Math.round(GPSP.acc);return[a<=10?"bom":a<=GPS_ACC_MAX?"med":"ruim",(a<=GPS_ACC_MAX?"GPS pronto":"GPS ajustando (vá para um local aberto)")+" · ±"+a+" m"]}
+  if(GPSP.err===2)return["ruim","Sem sinal de GPS. Vá para um local aberto."];
+  return["", "Ligando o GPS…"];
+}
+function pintarGpsPronto(){const e=document.getElementById("gpspronto");if(!e)return;const[c,t]=gpsProntoTxt();e.className="gsin "+c;e.textContent="📍 "+t;
+  const h=document.getElementById("gpsajuda");if(h)h.style.display=(GPSP.st==="denied"||GPSP.err===1)?"":"none"}
+function gpsAjudaHtml(){
+  return `<details id="gpsajuda" style="display:${GPSP.st==="denied"||GPSP.err===1?"":"none"};margin-top:8px"><summary class="mu" style="cursor:pointer">Como liberar a localização</summary><div class="mu" style="font-size:13px;line-height:1.5;margin-top:6px">
+  <b>iPhone (Chrome ou Safari):</b> Ajustes do iPhone → Privacidade e Segurança → Serviços de Localização (ligado) → Chrome (ou Safari) → “Ao Usar o App” e ative “Localização Precisa”. Depois recarregue o WilFit e toque em Permitir.<br>
+  <b>Android (Chrome):</b> toque no cadeado ao lado do endereço → Permissões → Localização → Permitir. Confira também se a localização do celular está ligada em modo de alta precisão.</div></details>`;
+}
+document.addEventListener("visibilitychange",()=>setTimeout(gpsAuto,300));
+gpsPermEstado();
+
 function gpsAbrir(t,retomar){
   if(!("geolocation" in navigator)){toast("Este aparelho/navegador não oferece GPS.");return}
   if(location.protocol==="http:"&&!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)||location.protocol==="file:"){toast("O GPS só funciona pelo link oficial (https).");return}
-  G=retomar||gpsNovo(t);G.kf=new Kalman(t==="Caminhada"?2:4);
+  gpsEsfriar();
+  G=retomar||gpsNovo(t);G.kf=new Kalman(t==="Caminhada"?2:4);G.auto=!retomar&&gpsAutoIni();
+  if(GPSP.fix&&Date.now()-GPSP.em<15000){G.sinal=GPSP.acc;G.posAtual=GPSP.fix}
   const d=document.createElement("div");d.className="gps";d.setAttribute("role","dialog");d.setAttribute("aria-modal","true");d.setAttribute("aria-label","Rastreamento por GPS");
   d.innerHTML=`<div class="gmap" id="gmap"><svg class="gsvg" aria-hidden="true"></svg></div>
   <div class="gpan">
@@ -1325,28 +1433,41 @@ function gpsAbrir(t,retomar){
   </div>`;
   document.body.appendChild(d);document.body.classList.add("lock");G.d=d;
   d.addEventListener("click",e=>{const b=e.target.closest("[data-g]");if(!b)return;gpsAcao(b.dataset.g)});
+  d.addEventListener("change",e=>{if(e.target.dataset.g==="auto"){G.auto=e.target.checked;store.set(GPS_AUTO_KEY,G.auto?"1":"0");if(!G.auto){clearTimeout(G.contT);G.cont=0}gpsBotoes();gpsPintar()}});
   gpsBotoes();gpsMapa();gpsIniciarWatch();acordar(true);
   G.tick=setInterval(gpsPintar,1000);gpsPintar();
 }
 function gpsBotoes(){
   const el=G&&G.d&&G.d.querySelector("#gbt");if(!el)return;
   const e=G.estado;
-  el.innerHTML=e==="pronto"?`<button class="btn pri w" data-g="ini">▶ Iniciar</button><button class="btn w" data-g="sair">Cancelar</button>`
+  el.innerHTML=e==="pronto"?(G.cont?`<button class="btn pri w" data-g="ini">▶ Iniciar agora</button><button class="btn w" data-g="espera">Esperar</button>`:`<button class="btn pri w" data-g="ini">▶ Iniciar</button><button class="btn w" data-g="sair">Cancelar</button>`)+`<label class="gaut"><input type="checkbox" data-g="auto" ${G.auto?"checked":""}> Começar sozinho quando o sinal ficar bom</label>`
    :e==="rodando"?`<button class="btn w" data-g="pausa">⏸ Pausar</button><button class="btn pri w" data-g="fim">■ Finalizar</button>`
    :e==="pausado"?`<button class="btn pri w" data-g="volta">▶ Retomar</button><button class="btn pri w" data-g="fim">■ Finalizar</button>`
    :e==="conf"?`<button class="btn pri w" data-g="salvar">✓ Salvar atividade</button><button class="btn w" data-g="volta2">Continuar</button><button class="btn dng w" data-g="desc">Descartar</button>`:"";
 }
 function gpsAcao(a){
   if(!G)return;
-  if(a==="ini"){G.ini=Date.now();G.hr=nowHM();G.seg=Date.now();G.estado="rodando";G.pts=[];G.dist=0;G.ultFix=null;gpsSalvarLocal()}
-  else if(a==="pausa"){G.acum+=Date.now()-G.seg;G.seg=null;G.estado="pausado";G.ultFix=null;gpsSalvarLocal()}
+  if(a==="espera"){clearTimeout(G.contT);G.cont=0;G.auto=false;gpsBotoes();gpsPintar();return}
+  if(a==="auto")return;
+  if(a==="ini"){clearTimeout(G.contT);G.cont=0;G.ini=Date.now();G.hr=nowHM();G.seg=Date.now();G.estado="rodando";G.pts=[];G.dist=0;G.ultFix=null;gpsSalvarLocal()}
+  else if(a==="pausa"){G.acum+=Date.now()-G.seg;G.seg=null;G.estado="pausado";G.ultFix=null;gpsSalvarLocal();gpsSalvarRemoto(true)}
   else if(a==="volta"){G.seg=Date.now();G.estado="rodando";G.ultFix=null;gpsSalvarLocal()}
-  else if(a==="fim"){if(G.seg){G.acum+=Date.now()-G.seg;G.seg=null}G.estado="conf";gpsSalvarLocal()}
+  else if(a==="fim"){if(G.seg){G.acum+=Date.now()-G.seg;G.seg=null}G.estado="conf";gpsSalvarLocal();gpsSalvarRemoto(true)}
   else if(a==="volta2"){G.seg=Date.now();G.estado="rodando";gpsSalvarLocal()}
   else if(a==="salvar"){gpsSalvar();return}
   else if(a==="desc"){if(G.descConf){gpsFechar(true);toast("Atividade descartada");return}G.descConf=1;toast("Toque em Descartar de novo para confirmar");return}
   else if(a==="sair"){gpsFechar(true);return}
   gpsBotoes();gpsPintar();
+}
+function gpsContagem(){
+  G.cont=3;gpsBotoes();
+  const ok=()=>G&&G.estado==="pronto"&&G.cont>0;
+  const passo=()=>{if(!ok())return;
+    const tg=G.d.querySelector("#gtempo");if(tg)tg.textContent=String(G.cont);
+    const dc=G.d.querySelector("#gdica");if(dc)dc.textContent="Sinal bom! Começando em "+G.cont+"…";
+    if(navigator.vibrate)try{navigator.vibrate(60)}catch(e){}
+    G.contT=setTimeout(()=>{if(!ok())return;G.cont--;if(G.cont===0)gpsAcao("ini");else passo()},1000)};
+  passo();
 }
 function gpsIniciarWatch(){
   G.watch=navigator.geolocation.watchPosition(gpsPonto,err=>{
@@ -1357,6 +1478,7 @@ function gpsIniciarWatch(){
 function gpsPonto(pos){
   if(!G)return;const c=pos.coords,acc=c.accuracy||999,t=pos.timestamp||Date.now();
   G.sinal=acc;G.posAtual=[c.latitude,c.longitude];
+  if(G.estado==="pronto"&&G.auto&&!G.cont&&acc<=GPS_ACC_MAX)gpsContagem();
   if(G.estado!=="rodando")return gpsPintar();
   if(acc>GPS_ACC_MAX)return gpsPintar();
   const f=G.kf.ok(c.latitude,c.longitude,acc,t),p=[f[0],f[1],t];
@@ -1380,6 +1502,8 @@ function gpsPintar(){
   if(G.estado==="conf"){$g("#gdica").textContent=`Resumo: ${km.toLocaleString("pt-BR",{maximumFractionDigits:2})} km em ${segFmt(tm)}${G.splits.length?" · parciais: "+G.splits.map((x,i)=>(i+1)+"º km "+paceSeg(x)).join(", "):""}.`}
   else if(G.estado==="pausado")$g("#gdica").textContent="Pausado. O tempo parado não conta.";
   else if(G.estado==="rodando")$g("#gdica").textContent="Gravando a rota. Mantenha a tela ligada e o app aberto.";
+  else if(G.estado==="pronto"&&G.cont){$g("#gtempo").textContent=String(G.cont);$g("#gdica").textContent="Sinal bom! Começando em "+G.cont+"…"}
+  else if(G.estado==="pronto")$g("#gdica").textContent=G.auto?"Aguardando o sinal ficar bom para começar sozinho. Mantenha a tela ligada.":"Mantenha a tela ligada e o app aberto durante a atividade.";
   gpsDesenhar();
 }
 /* mapa: Leaflet (OpenStreetMap) se disponível; senão, desenho simples da rota */
@@ -1436,8 +1560,9 @@ function gpsSalvar(){
 }
 function gpsFechar(limpar){
   if(!G)return;if(G.watch!=null)try{navigator.geolocation.clearWatch(G.watch)}catch(e){}
-  clearInterval(G.tick);if(G.map)try{G.map.remove()}catch(e){}
-  G.d&&G.d.remove();if(limpar)gpsLimparLocal();G=null;acordar(false);
+  clearInterval(G.tick);clearTimeout(G.contT);if(G.map)try{G.map.remove()}catch(e){}
+  setTimeout(gpsAuto,400);
+  G.d&&G.d.remove();if(limpar){gpsLimparLocal();gpsApagarRemoto()}G=null;acordar(false);
   document.body.classList.toggle("lock",!!((S.me&&S.det)||S.adm||(typeof G!=="undefined"&&G)||(typeof SH!=="undefined"&&SH)||(typeof CR!=="undefined"&&CR)));
 }
 /* tela sempre ligada durante o GPS (o navegador pausa o GPS com a tela apagada) */
@@ -1731,6 +1856,7 @@ function vPerfil(){
   <div class="card"><span class="lab">Aparência</span>
   <div class="pills">${[["auto","Automático"],["light","Claro"],["dark","Escuro"]].map(o=>`<button class="pill ${themePref()===o[0]?"on":""}" data-a="themeset" data-v="${o[0]}">${o[1]}</button>`).join("")}</div>
   ${isStandalone()?'<p class="mu">Aberto como app instalado (tela cheia).</p>':`<button class="btn w" data-a="fs">${fsEl()?"Sair da tela cheia":"Abrir em tela cheia"}</button>`}</div>
+  <div class="card"><span class="lab">Dados salvos</span><p class="mu" id="nuvem" style="margin-top:6px;line-height:1.5">${nuvemHtml()}</p></div>
   <div class="card"><div class="mu">E-mail</div><b style="overflow-wrap:anywhere">${esc(S.me)}</b></div>
   <button class="btn dng w" style="margin-top:20px" data-a="sair">Sair da conta</button>`;
 }
@@ -1781,7 +1907,7 @@ function R(){
   const view=views[S.tab]||vHome;
   $("#app").innerHTML=`<div class="wrap"><div class="top"><div class="logo">Wil<span>Fit</span></div><div class="row" style="gap:8px;min-width:0"><span id="sync" class="mu" style="font-size:11px;white-space:nowrap"></span><span class="chip" style="max-width:130px">${esc(S.me)}</span>${toolBtns()}<button data-a="tab" data-v="prf" aria-label="Perfil" style="padding:0;border-radius:50%">${avHtml("sm")}</button></div></div>${view()}</div>
   <nav class="nav">${tabs.map(t=>`<button class="${S.tab===t[0]?"on":""}" data-a="tab" data-v="${t[0]}" ${S.tab===t[0]?'aria-current="page"':""}>${IC[t[0]]}<span>${t[1]}</span></button>`).join("")}</nav>${S.det?modalDet():""}${modalAdm()}`;
-  paintRest();paintSync();
+  paintRest();paintSync();setTimeout(gpsAuto,0);
 }
 
 /* ---------- Cronômetro de descanso (só roda enquanto há descanso ativo) ---------- */
@@ -1893,7 +2019,7 @@ async function enter(em){
     else throw{msg:"Não foi possível carregar seus dados. Verifique a conexão e tente de novo."};
   }
   DB[em]=data;S.me=em;S.tab="home";S.dia=td();S.form.pw="";S.err="";S.ok="";
-  backfillHist();checkAch(true);pruneProg();saveLocal();setSync("ok");loadPhotos();loadAvatar();
+  backfillHist();checkAch(true);pruneProg();saveLocal();setSync("ok");loadPhotos();loadAvatar();setTimeout(espelhar,800);
   if(needPush){LAST="";DIRTY[em]=true;saveDirty();push()}
 }
 async function auth(){
@@ -1992,7 +2118,7 @@ document.addEventListener("click",e=>{
     case"shnovox":S.shNovo=null;break;
     case"gpsini":gpsAbrir(v);return;
     case"gpsret":gpsRetomar();return;
-    case"gpsdesc":gpsLimparLocal();toast("Atividade interrompida descartada");break;
+    case"gpsdesc":gpsLimparLocal();gpsApagarRemoto();toast("Atividade interrompida descartada");break;
     case"rota":verRota(+v);return;
     case"shtreino":shareTreino(S.dia);return;
     case"shach":{const a=ACH.find(z=>z[0]===v);if(a)abrirShare("conquista",a);return}
