@@ -11,6 +11,8 @@
 <meta name="apple-mobile-web-app-title" content="WilFit">
 <meta name="format-detection" content="telephone=no">
 <title>WilFit</title>
+<link rel="preconnect" href="https://hvbtrknxhxtulnlcymoh.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://hvbtrknxhxtulnlcymoh.supabase.co">
 <script>
 /* Aplica o tema antes de desenhar a tela (evita piscar) */
 (function(){var t="auto";try{t=localStorage.getItem("wilfit_theme")||"auto"}catch(e){}
@@ -549,8 +551,28 @@ let PH={},PH_N=0;
 try{const c=JSON.parse(store.get(PH_KEY)||"null");if(c&&c.m){PH=c.m;PH_N=Object.keys(PH).length}}catch(e){}
 const pubUrl=p=>SB_URL+"/storage/v1/object/public/"+BUCKET+"/"+p.split("/").map(encodeURIComponent).join("/");
 function photoKnown(x){return PH[normKey(x.id)]||PH[normKey(x.n)]||""}
+/* Versões leves (geradas automaticamente no GitHub a partir do bucket): ~5 KB a miniatura, ~80 KB a média */
+const OPT_KEY="wilfit_fotos_opt_v1";
+let OPT=null;try{OPT=JSON.parse(store.get(OPT_KEY)||"null")}catch(e){OPT=null}
+const optUrl=(path,t)=>{if(!OPT||!path||!OPT[path])return"";const[n,v]=String(OPT[path]).split("|");return"img/"+t+"/"+encodeURIComponent(n)+".webp"+(v?"?v="+v:"")};
+function mapaDeCaminhos(lista){const m={};lista.forEach(path=>{const k=normKey(path.split("/").pop());if(!m[k])m[k]=path;const a=PH_AK[k];if(a&&!m[a])m[a]=path});return m}
+if(OPT&&!PH_N){PH=mapaDeCaminhos(Object.keys(OPT));PH_N=Object.keys(PH).length}
+async function loadOpt(){
+  if(location.protocol==="file:")return;
+  try{
+    const r=await fetch("img/fotos.json",{cache:"no-cache"});if(!r.ok)return;
+    const j=await r.json(),arq=j&&j.arquivos||null;if(!arq)return;const vs=j.versoes||{},novo={};
+    Object.keys(arq).forEach(k=>{novo[k]=arq[k]+"|"+String(vs[k]||"").replace(/\D/g,"").slice(-12)});
+    const mudou=JSON.stringify(novo)!==JSON.stringify(OPT);OPT=novo;store.set(OPT_KEY,JSON.stringify(OPT));
+    if(!PH_N){PH=mapaDeCaminhos(Object.keys(OPT));PH_N=Object.keys(PH).length}
+    const ae=document.activeElement;
+    if(mudou&&S.me&&(S.det||["lib","home","trn"].indexOf(S.tab)>=0)&&!(ae&&/INPUT|SELECT/.test(ae.tagName)))R();
+  }catch(e){}
+}
+/* miniatura: tenta a versão leve; se faltar, cai para o original do Supabase */
+function thErr(el){const o=el.dataset.orig;if(o&&el.src.indexOf(o)<0){el.src=o;el.dataset.orig=""}else el.replaceWith(Object.assign(document.createElement("span"),{className:"th thp",textContent:"🏋️"}))}
 function photoUrls(x){
-  const k=photoKnown(x);if(k)return [pubUrl(k)];
+  const k=photoKnown(x);if(k){const m=optUrl(k,"m");return m?[m,pubUrl(k)]:[pubUrl(k)]}
   if(PH_N>0)return [];
   /* lista indisponível: tenta nomes prováveis */
   const ex=["jpg","jpeg","png","webp"],base=[x.id,x.n,norm(x.n).replace(/\s+/g,"_")],out=[];
@@ -1814,8 +1836,8 @@ function shareTreino(d){
 /* ---------- Miniatura do exercício (abre o mesmo exemplo da Biblioteca) ---------- */
 function exThumb(id){
   const x=EX[id];if(!x)return"";
-  const k=photoKnown(x),src=k?pubUrl(k):(PH_N===0?(photoUrls(x)[0]||""):"");
-  return `<button class="thb" data-a="det" data-v="${esc(id)}" aria-label="Ver exemplo de ${esc(x.n)}">${src?`<img class="th" loading="lazy" src="${esc(src)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'th thp',textContent:'🏋️'}))">`:`<span class="th thp">🏋️</span>`}</button>`;
+  const k=photoKnown(x),orig=k?pubUrl(k):(PH_N===0?(photoUrls(x)[0]||""):""),src=(k&&optUrl(k,"p"))||orig;
+  return `<button class="thb" data-a="det" data-v="${esc(id)}" aria-label="Ver exemplo de ${esc(x.n)}">${src?`<img class="th" loading="lazy" decoding="async" width="48" height="48" src="${esc(src)}" data-orig="${esc(src===orig?"":orig)}" alt="" onerror="thErr(this)">`:`<span class="th thp">🏋️</span>`}</button>`;
 }
 const exNome=id=>`<button class="exn" data-a="det" data-v="${esc(id)}">${esc(EX[id].n)}</button>`;
 
@@ -1934,7 +1956,7 @@ function listaBib(){
   const q=norm(S.q),L=CAT.filter(x=>(S.g==="Todos"||x.g===S.g)&&norm(x.n+" "+x.g+" "+x.e).includes(q));
   return L.length?L.map(x=>{const dias=DN.filter((_,i)=>plan(i)&&plan(i).ex.some(e=>e.id===x.id)).length;
     const fk=photoKnown(x);
-    return `<div class="card row" style="cursor:pointer" data-a="det" data-v="${x.id}">${fk?`<img class="th" loading="lazy" src="${esc(pubUrl(fk))}" alt="" onerror="this.style.display='none'">`:""}<div style="flex:1;min-width:0"><b>${esc(x.n)}</b><div class="mu">${esc(x.g)} · ${esc(x.e)}</div></div>${dias?`<span class="tag">${dias} dia(s)</span>`:""}<span style="color:var(--g);font-size:22px">›</span></div>`}).join(""):'<p class="mu" style="text-align:center;padding:30px 0">Nada encontrado</p>';
+    return `<div class="card row" style="cursor:pointer" data-a="det" data-v="${x.id}">${fk?`<img class="th" loading="lazy" decoding="async" width="48" height="48" src="${esc(optUrl(fk,"p")||pubUrl(fk))}" data-orig="${esc(optUrl(fk,"p")?pubUrl(fk):"")}" alt="" onerror="thErr(this)">`:""}<div style="flex:1;min-width:0"><b>${esc(x.n)}</b><div class="mu">${esc(x.g)} · ${esc(x.e)}</div></div>${dias?`<span class="tag">${dias} dia(s)</span>`:""}<span style="color:var(--g);font-size:22px">›</span></div>`}).join(""):'<p class="mu" style="text-align:center;padding:30px 0">Nada encontrado</p>';
 }
 function vBiblioteca(){
   return `<h1>Biblioteca</h1><p class="mu">${CAT.length} exercícios. Toque em um para ver como executar.</p>
@@ -1947,7 +1969,7 @@ function modalDet(){
   const x=EX[S.det];if(!x)return"";
   return `<div class="ov" data-a="fechar"><div class="sheet" role="dialog" aria-modal="true">
   <div class="row sp"><div><h2>${esc(x.n)}</h2><div class="mu">${esc(x.g)} · ${esc(x.e)}</div></div><button class="ib" data-a="fechar" aria-label="Fechar">✕</button></div>
-  ${(()=>{const u=photoUrls(x);return u.length?`<img class="foto" src="${esc(u[0])}" data-c="${esc(JSON.stringify(u))}" data-i="0" alt="${esc(x.n)}" data-a="zoom" role="button" tabindex="0" title="Toque para ampliar" onerror="imgErr(this)"><p class="zhint" id="zhint">Toque na foto para ampliar</p>`:""})()}
+  ${(()=>{const u=photoUrls(x);return u.length?`<img class="foto" src="${esc(u[0])}" data-c="${esc(JSON.stringify(u))}" data-i="0" data-orig="${esc(u[u.length-1])}" decoding="async" fetchpriority="high" alt="${esc(x.n)}" data-a="zoom" role="button" tabindex="0" title="Toque para ampliar" onerror="imgErr(this)"><p class="zhint" id="zhint">Toque na foto para ampliar</p>`:""})()}
   <div id="fanim" style="display:${photoUrls(x).length?"none":"block"}">
   <svg class="anim" viewBox="0 0 200 170" aria-label="Demonstração esquemática">
     <circle cx="100" cy="30" r="12" fill="none" stroke="var(--g)" stroke-width="3"/>
@@ -2143,7 +2165,7 @@ document.addEventListener("click",e=>{
     case"avpick":{const f=document.getElementById("avf");if(f){f.value="";f.click()}return}
     case"avdel":removerFoto();return;
     case"avadj":if(AV.url)abrirAjuste(AV.url.split("?")[0]);return;
-    case"zoom":openZoom(el.currentSrc||el.src,el.alt);return;
+    case"zoom":openZoom(el.dataset.orig||el.currentSrc||el.src,el.alt);return;
     case"chkap":boot();return;
     case"adm":S.adm={step:"pw",pw:"",users:[],err:"",busy:false};break;
     case"admclose":S.adm=null;break;
@@ -2248,7 +2270,8 @@ setInterval(()=>{
 if(S.me&&U()){backfillHist();checkAch(true);pruneProg();AV.url=avCacheGet(S.me)}
 R();
 checkNet();
-loadPhotos();
+loadOpt();loadPhotos();
+if("serviceWorker" in navigator&&(location.protocol==="https:"||/^(localhost|127\.0\.0\.1)$/.test(location.hostname)))window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})});
 boot();
 </script>
 </body>
