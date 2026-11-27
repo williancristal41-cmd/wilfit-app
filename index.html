@@ -146,6 +146,17 @@ ol.steps{padding-left:20px;font-size:14px;line-height:1.6;color:var(--tx2)}
 .zv .zb{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));display:flex;gap:8px;align-items:center;background:rgba(40,40,40,.85);border-radius:500px;padding:6px}
 .zv button{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:20px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;pointer-events:auto}
 .zv .zp{min-width:56px;text-align:center;color:#fff;font-size:13px;font-variant-numeric:tabular-nums}
+.crop{position:fixed;inset:0;z-index:160;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;padding:env(safe-area-inset-top) 16px calc(16px + env(safe-area-inset-bottom));touch-action:none;overscroll-behavior:contain}
+.crt{width:100%;max-width:480px;display:flex;align-items:center;justify-content:space-between;padding:12px 0}
+.crt button{min-width:44px;height:44px;border-radius:500px;background:rgba(255,255,255,.12);color:#fff;font-weight:700;padding:0 14px}
+.crt .crok{background:var(--g);color:#000}.crt .crok:disabled{opacity:.6}
+.crs{position:relative;width:min(88vw,380px);aspect-ratio:1/1;overflow:hidden;border-radius:12px;background:#111;margin-top:8px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.crs img{position:absolute;left:50%;top:50%;max-width:none;max-height:none;transform-origin:50% 50%;pointer-events:none;-webkit-user-drag:none}
+.crm{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.55);outline:2px solid rgba(255,255,255,.85);pointer-events:none}
+.crh{font-size:13px;color:#bbb;text-align:center;margin:12px 0 4px;max-width:380px}
+.crb{display:flex;align-items:center;gap:10px;width:min(88vw,380px);margin-top:8px}
+.crb button{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:20px;font-weight:700;flex-shrink:0}
+.crb input[type=range]{flex:1;min-height:auto;padding:0;background:transparent;accent-color:var(--g);-webkit-appearance:auto;appearance:auto}
 .fatal{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top));z-index:300;background:var(--red);color:#fff;padding:12px 16px;border-radius:12px;font-size:14px;font-weight:600}
 </style>
 </head>
@@ -786,50 +797,53 @@ async function doLogout(){
 
 /* ---------- Coach fictício (3 personalidades) ---------- */
 const COACHES={
-  tranquila:{nome:"Serena",emoji:"🧘",tit:"Tranquila",desc:"Calma, acolhedora, sem pressão."},
-  moderada:{nome:"Duda",emoji:"💪",tit:"Moderada",desc:"Equilibrada: anima e cobra na medida."},
-  agressiva:{nome:"Sargento Rocha",emoji:"🪖",tit:"Agressiva e bem-humorada",desc:"Grita, provoca e faz rir. Sem dó, mas com carinho."}
+  tranquila:{emoji:"🧘",tit:"Tranquila",desc:"Calma, acolhedora, sem pressão."},
+  moderada:{emoji:"💪",tit:"Moderada",desc:"Equilibrada: anima e cobra na medida."},
+  agressiva:{emoji:"🪖",tit:"Agressiva e bem-humorada",desc:"Grita, provoca e faz rir. Sem dó, mas com carinho."}
 };
 const CM={
   tranquila:{
-    semTreino:["Hoje não tem treino marcado, {n}. Descansar também faz parte do progresso.","Dia livre. Que tal uma caminhada leve ou um alongamento?","Sem treino hoje. Respire fundo, hidrate-se e recarregue as energias.","Seu corpo agradece os dias de pausa. Amanhã a gente continua."],
-    inicio:["Bom te ver por aqui, {n}. Vamos começar no seu ritmo.","Um exercício de cada vez. O importante é estar presente.","Comece com calma, foque na respiração e na postura.","Hoje é um bom dia para cuidar de você. Vamos juntos?"],
-    meio:["Você está indo muito bem. Continue com tranquilidade.","Metade do caminho. Respire e siga no seu tempo.","Cada série conta. Estou orgulhosa do seu esforço.","Mantenha a técnica limpa, sem pressa."],
-    quase:["Falta pouquinho, {n}. Termine com a mesma calma do começo.","Você já fez quase tudo. Só mais um pouco.","Reta final. Respire e conclua com qualidade."],
-    completo:["Treino concluído. Parabéns, {n}! Agora alongue e hidrate-se.","Missão cumprida com serenidade. Descanse bem.","Que bonito ver sua constância. Até o próximo treino."],
-    serie:["Muito bem. Respire.","Ótima série. Sem pressa.","Isso, com controle.","Mais uma. Você está indo bem."],
-    descanso:["Descanso concluído. Quando se sentir pronto, siga.","Pronto para a próxima? Vá no seu ritmo.","Tempo de descanso acabou. Respire fundo e continue."],
-    cardio:["Cardio registrado. Seu coração agradece.","Que bom que você se movimentou hoje.","Mais um passo para uma vida mais leve."],
-    volta:["Que bom que você voltou, {n}. Sem culpa: recomeçar é uma vitória.","Senti sua falta. Vamos retomar devagar?","Cada retorno conta. Hoje é um ótimo dia para recomeçar."],
-    conquista:["Você conquistou isso com paciência. Parabéns.","Uma conquista merecida. Aproveite o momento.","Seu esforço está florescendo."]
+    semTreino:["Hoje não tem treino marcado, {n}. Descansar também faz parte do progresso.","Dia livre. Que tal uma caminhada leve ou um alongamento?","Sem treino hoje. Respire fundo, hidrate-se e recarregue as energias.","Seu corpo agradece os dias de pausa. Amanhã a gente continua.","Aproveite o dia para dormir bem. O músculo cresce no descanso.","Dia de recuperação. Um copo d'água agora já é cuidar de você.","Sem pressa hoje. Uma boa alimentação também é treino.","Pausa merecida, {n}. Volte amanhã com a mente leve.","Que tal 10 minutos de alongamento? Seu corpo vai gostar.","Descansar sem culpa também é disciplina."],
+    inicio:["Bom te ver por aqui, {n}. Vamos começar no seu ritmo.","Um exercício de cada vez. O importante é estar presente.","Comece com calma, foque na respiração e na postura.","Hoje é um bom dia para cuidar de você. Vamos juntos?","Aqueça com carinho. Um corpo preparado treina melhor.","Respire fundo três vezes e comece quando estiver pronto.","Não precisa ser perfeito, só precisa começar.","Seu único compromisso hoje é dar o seu melhor possível.","Entre no treino como quem entra em casa: com tranquilidade.","Cada treino é um presente que você dá para o seu futuro.","Leve, firme e constante. É assim que se vai longe."],
+    meio:["Você está indo muito bem. Continue com tranquilidade.","Metade do caminho. Respire e siga no seu tempo.","Cada série conta. Estou orgulhosa do seu esforço.","Mantenha a técnica limpa, sem pressa.","Sinta o músculo trabalhar. Presença em cada repetição.","Bom ritmo. Se precisar, descanse um pouco mais.","Você já fez mais do que ontem. Isso é progresso.","Respire na volta do movimento e siga em frente.","Constância vale mais do que intensidade. Continue.","Sua dedicação de hoje vira resultado amanhã."],
+    quase:["Falta pouquinho, {n}. Termine com a mesma calma do começo.","Você já fez quase tudo. Só mais um pouco.","Reta final. Respire e conclua com qualidade.","Só mais algumas séries. Você consegue com tranquilidade.","Quase lá. Mantenha a postura até a última repetição.","Termine bem. A última série merece o mesmo cuidado da primeira."],
+    completo:["Treino concluído. Parabéns, {n}! Agora alongue e hidrate-se.","Missão cumprida com serenidade. Descanse bem.","Que bonito ver sua constância. Até o próximo treino.","Você cuidou de você hoje. Sinta orgulho disso.","Treino feito. Uma refeição boa agora completa o trabalho.","Mais um dia em que você escolheu a si mesmo. Lindo.","Respire fundo e perceba: você fez. Parabéns.","Corpo cansado, mente leve. Ótimo trabalho hoje."],
+    serie:["Muito bem. Respire.","Ótima série. Sem pressa.","Isso, com controle.","Mais uma. Você está indo bem.","Bonito movimento.","Respire e siga.","Série feita com cuidado.","Calma e constância."],
+    descanso:["Descanso concluído. Quando se sentir pronto, siga.","Pronto para a próxima? Vá no seu ritmo.","Tempo de descanso acabou. Respire fundo e continue.","Recuperado? Então vamos para a próxima com calma.","Hora de voltar, sem pressa e com atenção à postura."],
+    cardio:["Cardio registrado. Seu coração agradece.","Que bom que você se movimentou hoje.","Mais um passo para uma vida mais leve.","Cada minuto de cardio é cuidado com a sua saúde.","Fôlego em construção. Parabéns pela dedicação."],
+    volta:["Que bom que você voltou, {n}. Sem culpa: recomeçar é uma vitória.","Senti sua falta. Vamos retomar devagar?","Cada retorno conta. Hoje é um ótimo dia para recomeçar.","O importante não é nunca parar, é sempre voltar.","Bem-vindo de volta. Comece leve e o ritmo volta sozinho."],
+    conquista:["Você conquistou isso com paciência. Parabéns.","Uma conquista merecida. Aproveite o momento.","Seu esforço está florescendo.","Pequenos passos levaram você até aqui. Lindo.","Celebre: constância gera conquistas."],
+    frase:["Progresso, não perfeição.","Seu corpo ouve tudo o que sua mente diz. Fale com gentileza.","Devagar também se chega, desde que não pare.","Cuidar de si é um ato de amor diário.","A constância transforma o comum em extraordinário.","Um dia de cada vez já é muito.","Respire. Você está exatamente onde precisa estar para crescer.","Grandes mudanças nascem de pequenos hábitos.","Seja paciente com o processo e gentil com você.","O melhor treino é aquele que você consegue manter.","Força também é saber descansar.","Você não precisa vencer ninguém, só a versão de ontem.","Leveza e disciplina podem caminhar juntas.","Celebre cada pequena vitória.","Seu ritmo é o ritmo certo."]
   },
   moderada:{
-    semTreino:["Dia sem treino, {n}. Aproveite para descansar e planejar a semana.","Nada marcado para hoje. Que tal montar o treino de amanhã?","Descanso também é treino. Mas não se acostuma, hein!","Folga merecida. Amanhã a gente acelera."],
-    inicio:["Bora, {n}! Primeiro exercício te esperando.","Hoje é dia de evoluir. Vamos começar?","Aquece bem e manda ver na primeira série.","Treino montado, agora é só executar. Vamos!"],
-    meio:["Boa! Já passou da metade, mantém o ritmo.","Tá indo bem, {n}. Foco até o fim.","Continua assim, cada série te deixa mais forte.","Ótimo ritmo. Não deixa a peteca cair."],
-    quase:["Reta final! Só mais algumas séries.","Quase lá, {n}! Termina forte.","Falta pouco. Dá tudo agora!"],
-    completo:["Treino concluído! Mandou muito bem, {n}.","Missão cumprida! Descansa e se alimenta bem.","Isso é consistência. Orgulho de você!"],
-    serie:["Boa série!","Isso aí, mais uma!","Mandou bem!","Segue firme!","Show, próxima!"],
-    descanso:["Descanso acabou! Bora para a próxima série.","Hora de voltar. Vamos!","Recuperou? Então manda a próxima!"],
-    cardio:["Cardio registrado! Fôlego em dia.","Boa! Coração forte é coração treinado.","Mais quilômetros na conta. Excelente!"],
-    volta:["Opa, sumiu, hein {n}? Bora retomar hoje!","Bem-vindo de volta! Vamos recuperar o ritmo.","Faz uns dias que você não treina. Hoje é o dia!"],
-    conquista:["Conquista desbloqueada! Você merece.","Olha você evoluindo! Parabéns.","Mais uma pra coleção. Continua assim!"]
+    semTreino:["Dia sem treino, {n}. Aproveite para descansar e planejar a semana.","Nada marcado para hoje. Que tal montar o treino de amanhã?","Descanso também é treino. Mas não se acostuma, hein!","Folga merecida. Amanhã a gente acelera.","Dia livre: capricha na alimentação e no sono.","Sem treino hoje? Uma caminhada de 20 minutos já faz diferença.","Recupera bem, que amanhã tem trabalho!","Hoje é dia de recarregar. Amanhã é dia de render.","Aproveita a folga para alongar e soltar o corpo.","Descansa direito. Músculo cresce na recuperação."],
+    inicio:["Bora, {n}! Primeiro exercício te esperando.","Hoje é dia de evoluir. Vamos começar?","Aquece bem e manda ver na primeira série.","Treino montado, agora é só executar. Vamos!","Foco, técnica e vontade. Começa!","O mais difícil é começar. Já está aqui, então vamos!","Celular de lado e cabeça no treino. Bora!","Hoje você vai sair melhor do que entrou.","Primeira série é aquecimento da coragem. Vai!","Disciplina é fazer mesmo sem vontade. Começa agora.","Treino bom é treino feito. Vamos?"],
+    meio:["Boa! Já passou da metade, mantém o ritmo.","Tá indo bem, {n}. Foco até o fim.","Continua assim, cada série te deixa mais forte.","Ótimo ritmo. Não deixa a peteca cair.","Metade feita. A outra metade é onde o resultado mora.","Respira e segue. Você está mandando bem.","Mantém a técnica, a carga vem com o tempo.","Tá cansando? Sinal de que está funcionando.","Constância vence talento. Continua!","Mais um pouco e esse treino é seu."],
+    quase:["Reta final! Só mais algumas séries.","Quase lá, {n}! Termina forte.","Falta pouco. Dá tudo agora!","Últimas séries: é aqui que se faz a diferença.","Não para agora, você está a um passo de concluir.","Fecha com chave de ouro!"],
+    completo:["Treino concluído! Mandou muito bem, {n}.","Missão cumprida! Descansa e se alimenta bem.","Isso é consistência. Orgulho de você!","Mais um treino na conta. Esse é o caminho.","Treino feito! Agora hidrata e repõe as energias.","Parabéns! Você cumpriu o que se propôs.","Fechou o treino. Amanhã tem mais evolução.","Excelente! Quem treina assim colhe resultado."],
+    serie:["Boa série!","Isso aí, mais uma!","Mandou bem!","Segue firme!","Show, próxima!","Boa execução!","Mais uma pra conta!","Excelente ritmo!"],
+    descanso:["Descanso acabou! Bora para a próxima série.","Hora de voltar. Vamos!","Recuperou? Então manda a próxima!","Tempo esgotado. Próxima série te esperando.","Volta pro jogo, {n}!"],
+    cardio:["Cardio registrado! Fôlego em dia.","Boa! Coração forte é coração treinado.","Mais quilômetros na conta. Excelente!","Cardio feito, energia lá em cima!","Ótimo! Resistência se constrói assim."],
+    volta:["Opa, sumiu, hein {n}? Bora retomar hoje!","Bem-vindo de volta! Vamos recuperar o ritmo.","Faz uns dias que você não treina. Hoje é o dia!","Voltou! O importante é recomeçar. Bora!","Parou uns dias? Normal. Agora é retomar com tudo."],
+    conquista:["Conquista desbloqueada! Você merece.","Olha você evoluindo! Parabéns.","Mais uma pra coleção. Continua assim!","Resultado de esforço! Mandou bem.","Conquista na conta. Próxima meta!"],
+    frase:["Disciplina é escolher o que você quer mais em vez do que você quer agora.","Não espere motivação. Crie hábito.","O treino de hoje é o resultado de amanhã.","Você não precisa ser extremo, só consistente.","Cansaço passa. Orgulho fica.","Se fosse fácil, todo mundo faria.","Um treino ruim ainda é melhor que nenhum treino.","Pequenos progressos diários somam grandes resultados.","Seu único limite é aquele que você aceita.","Foco no processo que o resultado aparece.","Comece onde você está, use o que você tem.","Treinar é investir em você.","Quem persiste chega.","Faça hoje o que seu eu do futuro vai agradecer.","A meta não é ser melhor que os outros, é ser melhor que ontem."]
   },
   agressiva:{
-    semTreino:["Sem treino hoje? Tudo bem, recruta {n}. Mas eu tô de olho em você.","Dia de folga. Aproveita, porque amanhã eu vou te cobrar dobrado!","Nada marcado? Até o sofá tá cansado de você. Brincadeira... ou não.","Descansa, soldado. O inimigo (a preguiça) também tira folga."],
-    inicio:["DE PÉ, {n}! Os halteres não vão se levantar sozinhos!","Acabou a moleza! Primeiro exercício, AGORA!","Isso aqui não é spa, recruta! Bora suar!","Tá esperando convite com envelope dourado? COMEÇA!"],
-    meio:["Metade feita! Não ouse amolecer agora!","Tá suando? Ótimo, é a fraqueza saindo do corpo!","Continua, {n}! Eu não aceito desistência nem em sonho!","Firme! Até minha avó faz mais... mentira, você tá mandando bem. CONTINUA!"],
-    quase:["RETA FINAL! Quero ver sangue nos olhos, {n}!","Falta pouco! Se parar agora eu conto pra todo mundo!","Quase lá, recruta! Termina ou eu te faço fazer burpee!"],
-    completo:["TREINO CONCLUÍDO! Pode comemorar... por 5 segundos. Agora vai comer proteína!","Missão cumprida, {n}! Hoje você não decepcionou o Sargento.","Isso é que é soldado! Vai descansar que amanhã tem mais!"],
-    serie:["ISSO! Mais uma!","Só isso? Brincadeira, PRÓXIMA!","Gostei! Agora não amolece!","Mais uma pra conta, recruta!","Tá ficando monstro!"],
-    descanso:["ACABOU O DESCANSO! Levanta daí!","Chega de moleza, próxima série JÁ!","Descansou? Ótimo, agora sofre mais um pouco!"],
-    cardio:["Cardio registrado! Correu tanto que o Sargento ficou cansado só de ver.","Isso! Fôlego de atleta, recruta!","Coração bombando! Assim que eu gosto!"],
-    volta:["Olha quem resolveu aparecer! Achei que tinha fugido do quartel, {n}!","Sumiu por dias e volta assim, de boa? Pro treino, AGORA!","Saudade de sofrer? Pois o Sargento estava te esperando!"],
-    conquista:["MEDALHA! Até o Sargento ficou emocionado. Só um pouquinho.","Conquista desbloqueada! Não vai se achar, hein? Continua!","Mais uma pro peito, recruta! Orgulho... mas não conta pra ninguém."]
+    semTreino:["Sem treino hoje? Tudo bem, recruta {n}. Mas eu tô de olho em você.","Dia de folga. Aproveita, porque amanhã eu vou te cobrar dobrado!","Nada marcado? Até o sofá tá cansado de você. Brincadeira... ou não.","Descansa, soldado. O inimigo (a preguiça) também tira folga.","Folga não é férias, hein! Come direito e dorme cedo!","Hoje não tem treino, mas tem vigilância. Larga esse refrigerante!","Descansa os músculos, não a disciplina, recruta!","Aproveita o dia livre. Amanhã o ferro te espera e ele não perdoa.","Folga autorizada. Mas se eu te pegar comendo besteira, são 50 flexões!","Dia de recuperação. Até super-herói precisa recarregar a bateria."],
+    inicio:["DE PÉ, {n}! Os halteres não vão se levantar sozinhos!","Acabou a moleza! Primeiro exercício, AGORA!","Isso aqui não é spa, recruta! Bora suar!","Tá esperando convite com envelope dourado? COMEÇA!","Larga o celular! O espelho da academia pode esperar!","Aquece direito, que hoje o treino vai cobrar caro!","Hoje você vai suar até a alma pedir arrego. Bora!","Chegou a hora da verdade, recruta! Sem desculpas!","Preguiça? Não conheço. Primeira série, JÁ!","Cada minuto parado é um minuto a mais na barriga. ANDA!","Bom dia pra quem vai treinar. Pra quem vai enrolar: VAI TREINAR!"],
+    meio:["Metade feita! Não ouse amolecer agora!","Tá suando? Ótimo, é a fraqueza saindo do corpo!","Continua, {n}! Eu não aceito desistência nem em sonho!","Firme! Até minha avó faz mais... mentira, você tá mandando bem. CONTINUA!","Dor é só a fraqueza pedindo demissão!","Respira e volta! Descanso longo é para quem tá de férias!","Tá indo bem, mas eu sei que dá pra mais! MOSTRA!","Esse suor aí é investimento, recruta. Continua depositando!","Metade do caminho. A outra metade é onde nascem os campeões!","Não reclama, executa!"],
+    quase:["RETA FINAL! Quero ver sangue nos olhos, {n}!","Falta pouco! Se parar agora eu conto pra todo mundo!","Quase lá, recruta! Termina ou eu te faço fazer burpee!","Últimas séries! Aqui separa os fortes dos fofos!","Não chegou até aqui pra amarelar agora! TERMINA!","Só mais um pouco! O sofá pode esperar mais cinco minutos!"],
+    completo:["TREINO CONCLUÍDO! Pode comemorar... por 5 segundos. Agora vai comer proteína!","Missão cumprida, {n}! Hoje você não decepcionou o seu coach.","Isso é que é soldado! Vai descansar que amanhã tem mais!","ACABOU! Agora pode desmaiar no sofá... com dignidade!","Treino destruído! Você está oficialmente liberado... até amanhã!","Mandou muito, recruta! Quase me emocionei. Quase.","Treino feito! Vai tomar banho que você está precisando, haha!","Vitória! A preguiça perdeu mais uma batalha hoje!"],
+    serie:["ISSO! Mais uma!","Só isso? Brincadeira, PRÓXIMA!","Gostei! Agora não amolece!","Mais uma pra conta, recruta!","Tá ficando monstro!","BOA! Sem descanso eterno!","Aí sim! Continua!","Essa foi linda! Próxima!"],
+    descanso:["ACABOU O DESCANSO! Levanta daí!","Chega de moleza, próxima série JÁ!","Descansou? Ótimo, agora sofre mais um pouco!","Fim do recreio, recruta! De volta ao ferro!","Já descansou demais! O halter tá com saudade!"],
+    cardio:["Cardio registrado! Correu tanto que até eu cansei só de ver.","Isso! Fôlego de atleta, recruta!","Coração bombando! Assim que eu gosto!","Cardio feito! A gordura está fazendo as malas!","Mais quilômetros! Daqui a pouco você me alcança... daqui a muito."],
+    volta:["Olha quem resolveu aparecer! Achei que tinha fugido do quartel, {n}!","Sumiu por dias e volta assim, de boa? Pro treino, AGORA!","Saudade de sofrer? Pois eu estava te esperando!","Voltou! Vou fingir que não percebi o sumiço. Bora compensar!","Tava de férias e não me avisou? Recruta folgado! Começa!"],
+    conquista:["MEDALHA! Até o seu coach ficou emocionado. Só um pouquinho.","Conquista desbloqueada! Não vai se achar, hein? Continua!","Mais uma pro peito, recruta! Orgulho... mas não conta pra ninguém.","Conquistou! Agora quero a próxima, e pra ontem!","Olha só quem está colecionando medalhas! Bora pela próxima!"],
+    frase:["Suor é gordura chorando!","Sem dor, sem... pizza no fim de semana!","Desculpa não queima caloria!","O sofá é confortável, mas não te dá resultado.","Ninguém nunca se arrependeu de ter treinado.","Treina hoje pra não chorar no espelho amanhã!","Você não está cansado, está desacostumado!","Músculo não cresce com desculpa!","A preguiça liga, mas você não atende!","Se fosse moleza, chamava descanso!","Hoje dói, amanhã é orgulho!","Levanta! Campeão não nasce deitado!","O ferro não mente. Você mente pro ferro?","Desistir é fácil. Por isso é coisa de fraco!","Bora que o verão não espera ninguém!"]
   }
 };
 const coachId=()=>{const c=U()&&U().prof.coach;return COACHES[c]?c:"moderada"};
-const coachNome=()=>{const n=String((U()&&U().prof.nome)||"").trim().split(/\s+/)[0];return n||"atleta"};
+const coachNome=()=>{const p=U()&&U().prof;const a=String((p&&p.apelido)||"").trim();if(a)return a;const n=String((p&&p.nome)||"").trim().split(/\s+/)[0];return n||"atleta"};
 function coachFala(sit,seed){
   const L=(CM[coachId()]||CM.moderada)[sit]||[];if(!L.length)return"";
   const i=seed==null?Math.floor(Math.random()*L.length):Math.abs(seed)%L.length;
@@ -853,8 +867,10 @@ function ultimaAtividade(){
 }
 let COACH_ALT=0;
 function coachCard(){
-  const c=COACHES[coachId()],sit=coachSit(),msg=coachFala(sit,hashStr(isoLocal(new Date())+sit)+COACH_ALT);
-  return `<div class="card coach"><div class="cav" aria-hidden="true">${c.emoji}</div><div style="flex:1;min-width:0"><div class="row sp"><b>Coach ${esc(c.nome)}</b><button class="lk" style="margin:0;padding:2px 4px" data-a="coachalt" aria-label="Outra mensagem">↻</button></div><p class="cmsg">${esc(msg)}</p></div></div>`;
+  const c=COACHES[coachId()],sit=coachSit(),seed=hashStr(isoLocal(new Date())+sit)+COACH_ALT;
+  /* ↻ alterna entre frases da situação e frases motivacionais gerais */
+  const msg=COACH_ALT%2===1?coachFala("frase",seed):coachFala(sit,seed);
+  return `<div class="card coach"><div class="cav" aria-hidden="true">${c.emoji}</div><div style="flex:1;min-width:0"><div class="row sp"><b>Seu coach <span class="mu" style="font-weight:600">· ${esc(c.tit)}</span></b><button class="lk" style="margin:0;padding:2px 4px" data-a="coachalt" aria-label="Outra mensagem">↻</button></div><p class="cmsg">${esc(msg)}</p></div></div>`;
 }
 /* Balão do coach para eventos (série, descanso, conquista...) */
 let CB_Q=[],CB_T=null;
@@ -1002,11 +1018,14 @@ async function reduzirFoto(file){
 }
 async function enviarFoto(file){
   if(!file||AV.busy)return;
-  if(!/^image\//.test(file.type||"image/")){toast("Escolha um arquivo de imagem.");return}
   if(!SES){toast("Entre na conta para enviar a foto.");return}
+  abrirAjuste(file);
+}
+async function enviarBlob(blob){
+  if(!blob||AV.busy||!SES)return;
   AV.busy=true;R();
   try{
-    const blob=await reduzirFoto(file),uid=SES.user.id,path=uid+"/avatar.jpg";
+    const uid=SES.user.id,path=uid+"/avatar.jpg";
     const up=tk=>tfetch(SB_URL+"/storage/v1/object/"+AV_BUCKET+"/"+path,{method:"POST",headers:{apikey:SB_KEY,Authorization:"Bearer "+tk,"x-upsert":"true","Content-Type":"image/jpeg","cache-control":"3600"},body:blob},30000);
     let r=await up(await token());if(r.status===401)r=await up(await refreshSes());
     if(!r.ok){const j=await r.json().catch(()=>null);throw new Error((j&&(j.message||j.error))||("Erro "+r.status))}
@@ -1031,6 +1050,79 @@ async function removerFoto(){
   }catch(e){toast("Não foi possível remover a foto agora.")}
   finally{AV.busy=false;R()}
 }
+
+/* ---------- Ajuste da foto de perfil (enquadrar, zoom, girar) antes de enviar ---------- */
+let CR=null;
+async function carregarImg(src,cors){
+  return await new Promise((ok,er)=>{const i=new Image();if(cors)i.crossOrigin="anonymous";i.onload=()=>ok(i);i.onerror=()=>er(new Error("img"));i.src=src});
+}
+async function abrirAjuste(fonte){
+  let url=null,img;
+  try{
+    if(typeof fonte==="string")img=await carregarImg(fonte+(fonte.indexOf("?")>0?"&":"?")+"c="+Date.now(),true);
+    else{if(!/^image\//.test(fonte.type||"image/")){toast("Escolha um arquivo de imagem.");return}url=URL.createObjectURL(fonte);img=await carregarImg(url,false)}
+  }catch(e){if(url)URL.revokeObjectURL(url);toast("Não foi possível abrir essa imagem. Tente outra (JPG ou PNG).");return}
+  fecharAjuste();
+  const d=document.createElement("div");d.className="crop";d.setAttribute("role","dialog");d.setAttribute("aria-modal","true");d.setAttribute("aria-label","Ajustar foto de perfil");
+  d.innerHTML=`<div class="crt"><button data-c="x" aria-label="Cancelar">✕</button><b>Ajustar foto</b><button data-c="ok" class="crok">Salvar</button></div>
+  <div class="crs"><img alt="" draggable="false"><div class="crm" aria-hidden="true"></div></div>
+  <p class="crh">Arraste para enquadrar. Use dois dedos, a barra ou a roda do mouse para o zoom.</p>
+  <div class="crb"><button data-c="-" aria-label="Diminuir zoom">−</button><input type="range" min="1" max="5" step="0.01" value="1" aria-label="Zoom"><button data-c="+" aria-label="Aumentar zoom">+</button><button data-c="r" aria-label="Girar 90 graus">⟳</button></div>`;
+  const im=d.querySelector(".crs img");im.src=img.src;
+  document.body.appendChild(d);document.body.classList.add("lock");
+  const stage=d.querySelector(".crs"),rng=d.querySelector("input[type=range]");
+  const st={img,url,z:1,x:0,y:0,r:0,pts:new Map(),pinch:null,pan:null,W:0,base:1};
+  CR={d,st};
+  const dims=()=>{const rot=st.r%180!==0;return{w:rot?img.naturalHeight:img.naturalWidth,h:rot?img.naturalWidth:img.naturalHeight}};
+  const layout=()=>{st.W=stage.clientWidth;const m=dims();st.base=Math.max(st.W/m.w,st.W/m.h);draw()};
+  const clamp=()=>{const m=dims(),s=st.base*st.z,mx=Math.max(0,(m.w*s-st.W)/2),my=Math.max(0,(m.h*s-st.W)/2);st.x=Math.min(mx,Math.max(-mx,st.x));st.y=Math.min(my,Math.max(-my,st.y))};
+  const draw=()=>{clamp();const s=st.base*st.z;
+    im.style.width=img.naturalWidth+"px";im.style.height=img.naturalHeight+"px";
+    im.style.transform=`translate(-50%,-50%) translate(${st.x}px,${st.y}px) rotate(${st.r}deg) scale(${s})`;
+    rng.value=String(st.z)};
+  const zoomAt=(nz,px,py)=>{nz=Math.min(5,Math.max(1,nz));const rc=stage.getBoundingClientRect(),cx=px-rc.left-rc.width/2,cy=py-rc.top-rc.height/2,k=nz/st.z;
+    st.x=cx-(cx-st.x)*k;st.y=cy-(cy-st.y)*k;st.z=nz;draw()};
+  const centro=()=>{const rc=stage.getBoundingClientRect();return{x:rc.left+rc.width/2,y:rc.top+rc.height/2}};
+  layout();
+  const onRs=()=>layout();window.addEventListener("resize",onRs);st.onRs=onRs;
+  rng.addEventListener("input",()=>{const c=centro();zoomAt(+rng.value,c.x,c.y)});
+  d.addEventListener("click",async e=>{
+    e.stopPropagation();const b=e.target.closest("[data-c]");if(!b)return;const c=centro();
+    if(b.dataset.c==="x")fecharAjuste();
+    else if(b.dataset.c==="+")zoomAt(st.z*1.25,c.x,c.y);
+    else if(b.dataset.c==="-")zoomAt(st.z/1.25,c.x,c.y);
+    else if(b.dataset.c==="r"){st.r=(st.r+90)%360;st.x=0;st.y=0;layout()}
+    else if(b.dataset.c==="ok"){b.disabled=true;b.textContent="Salvando…";try{const blob=await recortar(st);fecharAjuste();await enviarBlob(blob)}catch(err){b.disabled=false;b.textContent="Salvar";toast("Não foi possível preparar a foto.")}}
+  });
+  stage.addEventListener("wheel",e=>{e.preventDefault();zoomAt(st.z*Math.exp(-e.deltaY*0.0015),e.clientX,e.clientY)},{passive:false});
+  stage.addEventListener("pointerdown",e=>{
+    stage.setPointerCapture&&stage.setPointerCapture(e.pointerId);
+    st.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(st.pts.size===2){const[a,b]=[...st.pts.values()];st.pinch={dist:Math.hypot(a.x-b.x,a.y-b.y)||1,mx:(a.x+b.x)/2,my:(a.y+b.y)/2};st.pan=null}
+    else if(st.pts.size===1)st.pan={x:e.clientX,y:e.clientY,ox:st.x,oy:st.y};
+  });
+  stage.addEventListener("pointermove",e=>{
+    if(!st.pts.has(e.pointerId))return;st.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(st.pinch&&st.pts.size>=2){const[a,b]=[...st.pts.values()],dist=Math.hypot(a.x-b.x,a.y-b.y)||1,mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+      zoomAt(st.z*dist/st.pinch.dist,mx,my);st.x+=mx-st.pinch.mx;st.y+=my-st.pinch.my;st.pinch={dist,mx,my};draw()}
+    else if(st.pan){st.x=st.pan.ox+(e.clientX-st.pan.x);st.y=st.pan.oy+(e.clientY-st.pan.y);draw()}
+  });
+  const up=e=>{st.pts.delete(e.pointerId);if(st.pts.size<2)st.pinch=null;if(st.pts.size===1){const p=[...st.pts.values()][0];st.pan={x:p.x,y:p.y,ox:st.x,oy:st.y}}else st.pan=null};
+  stage.addEventListener("pointerup",up);stage.addEventListener("pointercancel",up);
+}
+/* Gera a imagem final exatamente como aparece no quadro (512 px, JPEG) */
+async function recortar(st){
+  const L=512,c=document.createElement("canvas");c.width=c.height=L;const g=c.getContext("2d"),k=L/st.W,s=st.base*st.z*k;
+  g.fillStyle="#fff";g.fillRect(0,0,L,L);
+  g.translate(L/2+st.x*k,L/2+st.y*k);g.rotate(st.r*Math.PI/180);g.scale(s,s);
+  g.drawImage(st.img,-st.img.naturalWidth/2,-st.img.naturalHeight/2);
+  return await new Promise((ok,er)=>c.toBlob(b=>b?ok(b):er(new Error("blob")),"image/jpeg",.88));
+}
+function fecharAjuste(){
+  if(!CR)return;window.removeEventListener("resize",CR.st.onRs);if(CR.st.url)URL.revokeObjectURL(CR.st.url);
+  CR.d.remove();CR=null;document.body.classList.toggle("lock",!!((S.me&&S.det)||S.adm));
+}
+document.addEventListener("keydown",e=>{if(CR&&e.key==="Escape"){e.stopImmediatePropagation();fecharAjuste()}},true);
 
 /* ---------- Miniatura do exercício (abre o mesmo exemplo da Biblioteca) ---------- */
 function exThumb(id){
@@ -1105,7 +1197,7 @@ function vHome(){
     <div class="bar"><i style="width:${total?feitas/total*100:0}%"></i></div>
     ${p.ex.map(e=>{const c=doneN(S.dia,e);return `<div class="ex"><div class="row sp"><div class="exh">${exThumb(e.id)}<div style="min-width:0;flex:1">${exNome(e.id)}<div class="mu" style="font-size:12px">${e.s} × ${esc(e.r)} · descanso ${e.d}s</div></div></div><span class="${c===e.s?"tag-done":"mu"}" style="flex-shrink:0">${c}/${e.s}${c===e.s?" ✓":""}</span></div>${serieChips(S.dia,e)}</div>`}).join("")}
     </div>`;
-  return `<div class="hello"><button data-a="tab" data-v="prf" aria-label="Abrir perfil" style="padding:0;border-radius:50%">${avHtml()}</button><div style="min-width:0"><div class="mu">Olá,</div><b style="font-size:18px;overflow-wrap:anywhere">${esc(U().prof.nome||S.me)}</b></div></div>${coachCard()}${netBar()}${wkStrip()}${corpo}${achResumo()}<button class="lk" data-a="adm">Modo admin</button>`;
+  return `<div class="hello"><button data-a="tab" data-v="prf" aria-label="Abrir perfil" style="padding:0;border-radius:50%">${avHtml()}</button><div style="min-width:0"><div class="mu">Olá,</div><b style="font-size:18px;overflow-wrap:anywhere">${esc(String(U().prof.apelido||"").trim()||U().prof.nome||S.me)}</b></div></div>${coachCard()}${netBar()}${wkStrip()}${corpo}${achResumo()}<button class="lk" data-a="adm">Modo admin</button>`;
 }
 
 function vTreinos(){
@@ -1142,15 +1234,16 @@ function vPerfil(){
   if(alt>0&&pes>0){const h=alt<3?alt:alt/100,v=pes/(h*h);imc=v.toFixed(1).replace(".",",");cls=v<18.5?"Abaixo do peso":v<25?"Peso normal":v<30?"Sobrepeso":"Obesidade"}
   const cid=coachId();
   return `<h1>Perfil</h1><p class="mu">Seus dados pessoais e metas.</p>
-  <div class="card avbox">${avHtml("lg")}<div style="flex:1;min-width:0"><b>Foto de perfil</b><div class="mu" style="margin-bottom:8px">JPG, PNG ou WEBP. A foto é reduzida antes de enviar.</div>
+  <div class="card avbox">${avHtml("lg")}<div style="flex:1;min-width:0"><b>Foto de perfil</b><div class="mu" style="margin-bottom:8px">JPG, PNG ou WEBP. Depois de escolher, você ajusta o enquadramento.</div>
   <input type="file" accept="image/*" id="avf" data-f="avatar" hidden>
-  <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn pri" data-a="avpick" ${AV.busy?"disabled":""}>${AV.busy?"Enviando…":(AV.url?"Trocar foto":"Adicionar foto")}</button>${AV.url&&!AV.busy?`<button class="btn dng" data-a="avdel">Remover</button>`:""}</div></div></div>
-  <div class="card"><label class="lbl">Nome</label><input data-f="pf" data-k="nome" value="${esc(p.nome||"")}" placeholder="Seu nome">
+  <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn pri" data-a="avpick" ${AV.busy?"disabled":""}>${AV.busy?"Enviando…":(AV.url?"Trocar foto":"Adicionar foto")}</button>${AV.url&&!AV.busy?`<button class="btn" data-a="avadj">Ajustar</button><button class="btn dng" data-a="avdel">Remover</button>`:""}</div></div></div>
+  <div class="card"><label class="lbl">Nome</label><input data-f="pf" data-k="nome" value="${esc(p.nome||"")}" placeholder="Seu nome" autocomplete="name">
+  <label class="lbl" style="margin-top:10px">Apelido <span style="opacity:.8">(como o coach vai te chamar)</span></label><input data-f="pf" data-k="apelido" value="${esc(p.apelido||"")}" placeholder="Ex.: Wil" maxlength="24" autocomplete="nickname">
   <div class="g2"><div><label class="lbl">Altura (cm)</label><input type="number" inputmode="decimal" data-f="pf" data-k="alt" value="${esc(p.alt||"")}"></div><div><label class="lbl">Peso (kg)</label><input type="number" inputmode="decimal" step="0.1" data-f="pf" data-k="peso" value="${esc(p.peso||"")}"></div></div>
   <label class="lbl" style="margin-top:10px">Objetivo</label><input data-f="pf" data-k="obj" value="${esc(p.obj||"")}" placeholder="Ex.: ganhar massa magra"></div>
   <div class="card row sp"><div><span class="lab">IMC</span><div class="mu">${cls}</div></div><b style="font-size:30px">${imc}</b></div>
   <div class="card"><span class="lab">Seu coach</span><p class="mu" style="margin-top:4px">Escolha a personalidade que mais te motiva.</p>
-  ${Object.keys(COACHES).map(k=>{const c=COACHES[k];return `<button class="cpick ${cid===k?"on":""}" data-a="coach" data-v="${k}" aria-pressed="${cid===k}"><span class="cav">${c.emoji}</span><span style="min-width:0"><b>${esc(c.nome)}</b> <span class="mu">· ${esc(c.tit)}</span><div class="mu">${esc(c.desc)}</div></span></button>`}).join("")}</div>
+  ${Object.keys(COACHES).map(k=>{const c=COACHES[k];return `<button class="cpick ${cid===k?"on":""}" data-a="coach" data-v="${k}" aria-pressed="${cid===k}"><span class="cav">${c.emoji}</span><span style="min-width:0"><b>${esc(c.tit)}</b><div class="mu">${esc(c.desc)}</div></span></button>`}).join("")}</div>
   ${achResumo()}
   <div class="card"><span class="lab">Aparência</span>
   <div class="pills">${[["auto","Automático"],["light","Claro"],["dark","Escuro"]].map(o=>`<button class="pill ${themePref()===o[0]?"on":""}" data-a="themeset" data-v="${o[0]}">${o[1]}</button>`).join("")}</div>
@@ -1367,10 +1460,11 @@ document.addEventListener("click",e=>{
     case"theme":toggleTheme();break;
     case"themeset":setTheme(v);break;
     case"fs":toggleFS();return;
-    case"coach":U().prof.coach=v;COACH_ALT=0;coachBalao(coachFala("inicio"),"Coach "+COACHES[coachId()].nome+" no comando");break;
+    case"coach":U().prof.coach=v;COACH_ALT=0;coachBalao(coachFala("frase"),"Personalidade "+COACHES[coachId()].tit.toLowerCase()+" ativada");break;
     case"coachalt":COACH_ALT++;break;
     case"avpick":{const f=document.getElementById("avf");if(f){f.value="";f.click()}return}
     case"avdel":removerFoto();return;
+    case"avadj":if(AV.url)abrirAjuste(AV.url.split("?")[0]);return;
     case"zoom":openZoom(el.currentSrc||el.src,el.alt);return;
     case"chkap":boot();return;
     case"adm":S.adm={step:"pw",pw:"",users:[],err:"",busy:false};break;
